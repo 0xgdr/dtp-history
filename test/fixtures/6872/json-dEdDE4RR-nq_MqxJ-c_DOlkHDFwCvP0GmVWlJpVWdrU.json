@@ -1,0 +1,68 @@
+{
+  "name": "Degen Trash Panda #6872",
+  "symbol": "DTP",
+  "image": "https://www.arweave.net/KCPnIoNva-EubeDnc6vLZRrlfijdEVN5Pi2-pz8f0ZQ?ext=png",
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.arweave.net/KCPnIoNva-EubeDnc6vLZRrlfijdEVN5Pi2-pz8f0ZQ?ext=png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "trshC9cTgL3BPXoAbp5w9UfnUMWEJx5G61vUijXPMLH",
+        "share": 59
+      },
+      {
+        "address": "3B86L4BrRjm9V7sd3AjjJq5XFtyqMgCYMCTwqMMvAxgr",
+        "share": 10
+      },
+      {
+        "address": "8BoJdKKz3j4bUGJdAdGhaiSpv1EM9HhSm1cjy1iPrfhk",
+        "share": 5
+      },
+      {
+        "address": "ENACtpCWKJAomGtWVH2UqdNKmkR1Ft4V81gC4oUbi5W1",
+        "share": 26
+      }
+    ]
+  },
+  "description": "Inhabiting their own underworld society, the Degenerate Trash Pandas are governed by no individuals and live by no rules. What they have is their trash, and their trash is their treasure. They’ll do whatever they can to get their dirty little paws on it.",
+  "seller_fee_basis_points": 420,
+  "attributes": [
+    {
+      "trait_type": "HEAD",
+      "value": "Headband"
+    },
+    {
+      "trait_type": "BODY",
+      "value": "Crayon Farmer"
+    },
+    {
+      "trait_type": "MOUTH",
+      "value": "No Traits"
+    },
+    {
+      "trait_type": "GLASSES",
+      "value": "No Traits"
+    },
+    {
+      "trait_type": "BACKGROUND",
+      "value": "Red"
+    },
+    {
+      "trait_type": "FUR",
+      "value": "Red - Grin"
+    },
+    {
+      "trait_type": "❤️",
+      "value": 4
+    }
+  ],
+  "collection": {
+    "name": "Degen Trash Pandas",
+    "family": "Degeniverse"
+  }
+}
