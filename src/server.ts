@@ -34,3 +34,16 @@ const server = Bun.serve({
 });
 
 console.log(`Listening on ${server.url}`);
+
+// Railway sends SIGTERM when a new deploy replaces this one. Stop taking requests, let the ones
+// in flight finish (up to 10 s), then exit cleanly instead of being killed mid-request.
+let stopping = false;
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, async () => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${signal}: finishing in-flight requests, then exiting`);
+    await Promise.race([server.stop(), Bun.sleep(10_000)]);
+    process.exit(0);
+  });
+}
