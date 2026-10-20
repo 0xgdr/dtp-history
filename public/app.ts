@@ -30,7 +30,7 @@ function loadFromUrl(): void {
   const q = new URLSearchParams(location.search).get("n")?.trim() ?? "";
   input.value = q;
   if (q) load(q);
-  else result.replaceChildren();
+  else result.replaceChildren(renderWelcome());
 }
 
 async function load(q: string): Promise<void> {
@@ -38,26 +38,47 @@ async function load(q: string): Promise<void> {
   const controller = new AbortController();
   inflight = controller;
   result.replaceChildren(
-    h("div", { class: "loading" }, h("span", { class: "spinner" }), "Rebuilding history from chain… the first load can take 10–30 s."),
+    h(
+      "div",
+      { class: "notice loading" },
+      h("span", { class: "spinner", "aria-hidden": "true" }),
+      h("p", {}, "Digging through this Panda's transactions. The first look can take up to a minute; after that it's instant."),
+    ),
   );
   try {
     const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
     const body = (await res.json()) as HistoryResult | ApiError;
     if (controller.signal.aborted) return;
-    result.replaceChildren(...("error" in body ? renderError(res.status, body) : renderHistory(body)));
+    result.replaceChildren(...("error" in body ? renderError(body) : renderHistory(body)));
   } catch (err) {
     if (controller.signal.aborted) return;
-    result.replaceChildren(h("div", { class: "error" }, `Request failed: ${err instanceof Error ? err.message : err}`));
+    result.replaceChildren(
+      h("div", { class: "notice error" }, h("p", {}, `The check didn't finish: ${err instanceof Error ? err.message : err}. Try again.`)),
+    );
   }
 }
 
 // --- Rendering ---
 
-function renderError(status: number, body: ApiError): Node[] {
-  const box = h("div", { class: "error" }, h("strong", {}, `${status} `), body.detail);
+function renderWelcome(): HTMLElement {
+  return h(
+    "section",
+    { class: "welcome" },
+    h("h1", {}, "Has your Panda been swapped?"),
+    h(
+      "p",
+      {},
+      "Enter a Degen Trash Panda number. We rebuild its metadata history from Solana and compare today's art and six traits with the day it was minted.",
+    ),
+    h("p", {}, "Try ", lookupLink("6872", "#6872"), "."),
+  );
+}
+
+function renderError(body: ApiError): Node[] {
+  const box = h("div", { class: "notice error" }, h("p", {}, sentence(body.detail)));
   if (body.candidates?.length) {
     box.append(
-      h("p", {}, "Pick one of the mints:"),
+      h("p", {}, "This number is on more than one mint. Pick one:"),
       h("ul", {}, ...body.candidates.map((mint) => h("li", {}, lookupLink(mint, mint)))),
     );
   }
@@ -65,171 +86,210 @@ function renderError(status: number, body: ApiError): Node[] {
 }
 
 function renderHistory(r: HistoryResult): Node[] {
-  const nodes: Node[] = [renderVerdict(r), renderTraits(r)];
-  const swapSteps = r.steps.filter(hasSwap).length;
-  const timeline = h("ol", { class: "timeline" }, ...r.steps.map(renderStep));
-  const empty = h("p", { class: "muted", hidden: "" }, "No step changed the traits or the art.");
-  const toggle = h("input", { type: "checkbox", id: "only-swaps" }) as HTMLInputElement;
-  toggle.addEventListener("change", () => {
-    timeline.classList.toggle("only-swaps", toggle.checked);
-    empty.hidden = !(toggle.checked && swapSteps === 0);
-  });
-  nodes.push(
-    h(
-      "div",
-      { class: "timeline-head" },
-      h("h2", {}, `Timeline (${r.steps.length} steps)`),
-      h("label", { class: "toggle" }, toggle, ` Only steps with trait/art changes (${swapSteps})`),
-    ),
-    empty,
-    timeline,
-  );
-  if (r.otherMetadataIx.length > 0) nodes.push(renderOther(r));
-  nodes.push(
-    h(
-      "p",
-      { class: "meta" },
-      `${r.signaturesScanned} signatures scanned · metadata PDA `,
-      code(r.metadataPda),
-      ` · built ${new Date(r.cachedAt).toUTCString()}`,
-    ),
-  );
+  const nodes: Node[] = [renderHero(r)];
+  if (r.verdictChanges.some((c) => c.field === "image")) nodes.push(renderCompare(r));
+  nodes.push(renderTimeline(r), renderFooter(r));
   return nodes;
 }
 
-const VERDICT_CLASS: Record<HistoryResult["verdict"], string> = {
-  Original: "ok",
-  "Traits/art changed": "bad",
-  Unknown: "unknown",
+const STAMP: Record<HistoryResult["verdict"], { text: string; cls: string }> = {
+  Original: { text: "Original", cls: "ok" },
+  "Traits/art changed": { text: "Swapped", cls: "bad" },
+  Unknown: { text: "Unchecked", cls: "unknown" },
 };
 
-function renderVerdict(r: HistoryResult): HTMLElement {
-  const title = r.number !== null ? `Degen Trash Panda #${r.number}` : "Unnumbered mint";
-  const banner = h(
+function renderHero(r: HistoryResult): HTMLElement {
+  const stamp = STAMP[r.verdict];
+  const mintDate = longDate(r.steps[0]?.blockTime ?? null);
+  const changed = r.verdictChanges.map((c) => (c.field === "image" ? "the art" : titleCase(c.field)));
+
+  const headline =
+    r.verdict === "Original" ? "Untouched since mint" : r.verdict === "Traits/art changed" ? "Swapped since mint" : "Can't tell yet";
+  const detail =
+    r.verdict === "Original"
+      ? `The art and all six traits match the mint${mintDate ? ` on ${mintDate}` : ""}.`
+      : r.verdict === "Traits/art changed"
+        ? `${capitalise(listJoin(changed))} ${changed.length === 1 ? "differs" : "differ"} from the mint${mintDate ? ` on ${mintDate}` : ""}.`
+        : sentence(r.warnings[0] ?? "Part of the history couldn't be fetched.");
+
+  const notes: string[] = [];
+  if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
+  if (r.burned) notes.push("This Panda has been burned: its metadata account no longer exists.");
+  for (const w of r.warnings) if (!(r.verdict === "Unknown" && w === r.warnings[0])) notes.push(sentence(w));
+
+  return h(
     "section",
-    { class: `verdict ${VERDICT_CLASS[r.verdict]}` },
-    thumb(r.current.image, "current image", "verdict-thumb"),
+    { class: `hero ${stamp.cls}` },
+    h(
+      "figure",
+      { class: "hero-art" },
+      thumb(r.current.image, r.number !== null ? `Degen Trash Panda #${r.number}` : "This Panda's current art", "hero-img"),
+      h("span", { class: `stamp ${stamp.cls}`, "aria-hidden": "true" }, stamp.text),
+    ),
     h(
       "div",
-      {},
-      h("p", { class: "verdict-label" }, r.verdict),
-      h("p", {}, h("strong", {}, title), " · mint ", solscan("token", r.mint)),
+      { class: "hero-text" },
+      h("p", { class: "collection" }, "Degen Trash Panda"),
+      h("h1", { class: "number" }, r.number !== null ? `#${r.number}` : "No number"),
+      h("p", { class: `headline ${stamp.cls}` }, headline),
+      h("p", { class: "detail" }, detail),
+      notes.length ? h("ul", { class: "notes" }, ...notes.map((n) => h("li", {}, n))) : "",
+      renderTraits(r),
+      h("p", { class: "links" }, "Mint ", solscan("token", r.mint)),
     ),
   );
-  const notes: Node[] = [];
-  if (r.burned) notes.push(h("li", {}, "Burned: the metadata account no longer exists."));
-  if (r.changedInHistory) notes.push(h("li", {}, "The art or traits changed at some point and were later restored."));
-  for (const w of r.warnings) notes.push(h("li", {}, w));
-  if (notes.length) banner.querySelector("div")!.append(h("ul", { class: "warnings" }, ...notes));
-  return banner;
 }
 
-// The six traits and the image, mint vs now, with changed rows highlighted. Always shown, since
-// this is what the verdict is about.
+// The six traits and the image, mint vs now. This is what the verdict is about.
 function renderTraits(r: HistoryResult): HTMLElement {
-  const box = h("section", { class: "changes" });
-  const imageChanged = r.verdictChanges.some((c) => c.field === "image");
-  if (imageChanged) {
-    box.append(
-      h(
-        "div",
-        { class: "compare" },
-        h("figure", {}, thumb(r.original.image, "original image"), h("figcaption", {}, "At mint")),
-        h("figure", {}, thumb(r.current.image, "current image"), h("figcaption", {}, "Now")),
-      ),
-    );
-  }
-
   const mint = readTraits(r.steps[0]?.json ?? null).values;
-  const now = readTraits(r.steps.at(-1)?.json ?? null).values;
-  const changed = new Set(r.verdictChanges.map((c) => c.field));
-  const row = (label: string, from: string, to: string, isChanged: boolean) =>
-    h("tr", isChanged ? { class: "changed" } : {}, h("td", {}, label), h("td", {}, from), h("td", {}, isChanged ? to : "same"));
-  const imageNow = { same: "same", rehosted: "same (re-hosted)", different: "changed", unknown: "not compared" }[r.imageCheck];
+  const changed = new Map(r.verdictChanges.map((c) => [c.field, c]));
 
-  box.append(
+  const row = (label: string, value: Node | string, status: Node | string, isChanged: boolean) =>
     h(
-      "table",
-      {},
-      h("thead", {}, h("tr", {}, h("th", {}, "Trait"), h("th", {}, "At mint"), h("th", {}, "Now"))),
-      h(
-        "tbody",
-        {},
-        ...TRAITS.map((t) => row(t, mint.get(t) ?? "missing", now.get(t) ?? "missing", changed.has(t))),
-        h(
-          "tr",
-          imageChanged ? { class: "changed" } : {},
-          h("td", {}, "Image"),
-          h("td", {}, r.original.image ? safeLink(r.original.image, "at mint") : "missing"),
-          h("td", {}, imageChanged && r.current.image ? safeLink(r.current.image, "changed") : imageNow),
-        ),
-      ),
-    ),
+      "div",
+      { class: `trait${isChanged ? " changed" : ""}` },
+      h("dt", {}, label),
+      h("dd", {}, value),
+      h("dd", { class: "status" }, status),
+    );
+  const same = () => h("span", { class: "same", title: "Same as at mint" }, "✓");
+
+  const imageChange = changed.get("image");
+  const imageStatus =
+    imageChange && r.current.image
+      ? h("span", {}, "now ", safeLink(r.current.image, "different"))
+      : r.imageCheck === "unknown"
+        ? "not compared"
+        : same();
+
+  return h(
+    "dl",
+    { class: "traits", "aria-label": "Traits at mint and now" },
+    ...TRAITS.map((t) => {
+      const c = changed.get(t);
+      return row(titleCase(t), mint.get(t) ?? "none", c ? `now ${c.to ?? "missing"}` : same(), Boolean(c));
+    }),
+    row("Art", r.original.image ? safeLink(r.original.image, "original image") : "none", imageStatus, Boolean(imageChange)),
   );
-  return box;
 }
 
-function hasSwap(step: Step): boolean {
-  return step.diff.some((c) => c.tag === "swap");
+function renderCompare(r: HistoryResult): HTMLElement {
+  return h(
+    "section",
+    { class: "compare" },
+    h("figure", {}, thumb(r.original.image, "Art at mint"), h("figcaption", {}, "At mint")),
+    h("figure", {}, thumb(r.current.image, "Art now"), h("figcaption", {}, "Now")),
+  );
+}
+
+function renderTimeline(r: HistoryResult): HTMLElement {
+  const swapSteps = r.steps.filter(hasSwap).length;
+  const list = h("ol", { class: "timeline" }, ...r.steps.map(renderStep));
+  const empty = h("p", { class: "empty" }, "No update ever touched the art or the six traits.");
+
+  // On by default: the full history is one click away.
+  const toggle = h("input", { type: "checkbox", id: "only-swaps" }) as HTMLInputElement;
+  toggle.checked = true;
+  const apply = () => {
+    list.classList.toggle("only-swaps", toggle.checked);
+    empty.hidden = !(toggle.checked && swapSteps === 0);
+  };
+  toggle.addEventListener("change", apply);
+  apply();
+
+  return h(
+    "section",
+    { class: "history" },
+    h(
+      "div",
+      { class: "history-head" },
+      h("h2", {}, "History"),
+      h("label", { class: "toggle" }, toggle, h("span", {}, "Only trait and art changes")),
+    ),
+    h("p", { class: "history-sub" }, historySummary(r.steps.length - 1, swapSteps)),
+    empty,
+    list,
+  );
+}
+
+function historySummary(updates: number, swaps: number): string {
+  if (updates <= 0) return "No updates since mint.";
+  const touched = swaps === 0 ? "none touched" : swaps === updates ? "all touched" : `${swaps} touched`;
+  return `${updates} ${updates === 1 ? "update" : "updates"} since mint; ${touched} the art or traits.`;
 }
 
 function renderStep(step: Step): HTMLElement {
   const swaps = step.diff.filter((c) => c.tag === "swap");
   const cosmetic = step.diff.filter((c) => c.tag === "cosmetic");
+  const summary =
+    swaps.length > 0
+      ? `Changed ${listJoin(swaps.map(swapName))}`
+      : step.index === 0
+        ? "Starting art and traits"
+        : capitalise(listJoin(unique(cosmetic.map(cosmeticPhrase)))) || "No visible change";
+
   return h(
     "li",
     { class: `step${swaps.length ? " has-swap" : ""}` },
-    thumb(step.image, `image at step ${step.index}`, "step-thumb"),
     h(
-      "div",
-      { class: "step-body" },
+      "details",
+      {},
       h(
-        "p",
-        { class: "step-head" },
-        h("span", { class: "date" }, step.dateUtc ? `${step.dateUtc} UTC` : "date unknown"),
-        h("span", { class: "kind" }, step.kind),
-        step.sig ? solscan("tx", step.sig) : h("span", { class: "muted" }, "from the metadata account"),
-      ),
-      h(
-        "dl",
+        "summary",
         {},
-        ...(step.authority ? [h("dt", {}, "Authority"), h("dd", {}, short(step.authority))] : []),
-        ...(step.txSigners.length ? [h("dt", {}, "Signers"), h("dd", {}, ...join(step.txSigners.map(short)))] : []),
-        h("dt", {}, "URI"),
-        h("dd", {}, step.uri ? safeLink(step.uri, step.uri) : "none"),
+        h("time", { title: step.dateUtc ? `${step.dateUtc} UTC` : "" }, shortDate(step.blockTime)),
+        h("span", { class: "step-title" }, stepTitle(step)),
+        h("span", { class: "step-summary" }, summary),
       ),
-      swaps.length ? h("div", { class: "chips" }, ...swaps.map(chip)) : "",
-      step.index === 0
-        ? h("p", { class: "muted" }, "Mint state")
-        : swaps.length === 0
-          ? h("p", { class: "muted" }, "No trait or art change")
-          : "",
-      cosmetic.length
-        ? h(
-            "details",
-            { class: "other-changes" },
-            h("summary", {}, `${cosmetic.length} other ${cosmetic.length === 1 ? "change" : "changes"}`),
-            h("div", { class: "chips" }, ...cosmetic.map(chip)),
-          )
-        : "",
-      step.jsonError ? h("p", { class: "error-inline" }, `JSON unavailable: ${step.jsonError}`) : "",
-      step.json ? h("details", {}, h("summary", {}, "Metadata JSON"), h("pre", {}, JSON.stringify(step.json, null, 2))) : "",
+      h(
+        "div",
+        { class: "step-body" },
+        thumb(step.image, `Art at this update`, "step-img"),
+        h(
+          "div",
+          {},
+          swaps.length ? h("div", { class: "chips" }, ...swaps.map(chip)) : "",
+          cosmetic.length ? h("div", { class: "chips" }, ...cosmetic.map(chip)) : "",
+          h(
+            "dl",
+            { class: "facts" },
+            h("dt", {}, "Transaction"),
+            h("dd", {}, step.sig ? solscan("tx", step.sig) : "read from the metadata account"),
+            h("dt", {}, "Instruction"),
+            h("dd", {}, step.kind),
+            ...(step.authority ? [h("dt", {}, "Authority"), h("dd", {}, short(step.authority))] : []),
+            ...(step.txSigners.length ? [h("dt", {}, "Signed by"), h("dd", {}, ...join(step.txSigners.map(short)))] : []),
+            h("dt", {}, "Metadata"),
+            h("dd", {}, step.uri ? safeLink(step.uri, hostOf(step.uri)) : "none"),
+          ),
+          step.jsonError ? h("p", { class: "error-inline" }, `Metadata file unavailable: ${step.jsonError}`) : "",
+          step.json ? h("details", { class: "json" }, h("summary", {}, "Metadata file"), h("pre", {}, JSON.stringify(step.json, null, 2))) : "",
+        ),
+      ),
     ),
   );
 }
 
-function renderOther(r: HistoryResult): HTMLElement {
+function renderFooter(r: HistoryResult): HTMLElement {
   return h(
-    "details",
-    { class: "other" },
-    h("summary", {}, `Other metadata instructions (${r.otherMetadataIx.length})`),
-    h(
-      "ul",
-      {},
-      ...r.otherMetadataIx.map((o) =>
-        h("li", {}, `${o.dateUtc ?? "?"} · ${o.kind} · `, solscan("tx", o.sig), o.hex ? h("code", {}, ` ${o.hex}`) : ""),
-      ),
-    ),
+    "footer",
+    { class: "foot" },
+    r.otherMetadataIx.length
+      ? h(
+          "details",
+          {},
+          h("summary", {}, `${r.otherMetadataIx.length} other metadata instructions`),
+          h(
+            "ul",
+            {},
+            ...r.otherMetadataIx.map((o) =>
+              h("li", {}, `${shortDate(o.dateUtc ? Date.parse(o.dateUtc) / 1000 : null)}, ${o.kind}, `, solscan("tx", o.sig)),
+            ),
+          ),
+        )
+      : "",
+    h("p", {}, `Built from ${r.signaturesScanned} transactions on ${longDate(Date.parse(r.cachedAt) / 1000)}. Metadata account `, short(r.metadataPda), "."),
   );
 }
 
@@ -237,6 +297,34 @@ function chip(c: Change): HTMLElement {
   const path = shortenAddresses(c.path);
   const text = c.label ? `${path}: ${c.label}` : `${path}: ${fmt(c.from)} → ${fmt(c.to)}`;
   return h("span", { class: `chip ${c.tag}`, title: `${c.path}\n${full(c.from)}\n→ ${full(c.to)}` }, text);
+}
+
+// --- Words ---
+
+function stepTitle(step: Step): string {
+  if (step.kind.startsWith("Create")) return "Minted";
+  if (step.sig === null) return "Current state";
+  return "Metadata updated";
+}
+
+function swapName(c: Change): string {
+  return c.path === "image" ? "the art" : titleCase(c.path.replace(/^attributes\./, ""));
+}
+
+function cosmeticPhrase(c: Change): string {
+  const p = c.path;
+  if (p === "uri") return c.label === "URI host move" ? "metadata re-hosted" : "new metadata file";
+  if (p.startsWith("creators.") || p === "properties.creators") return "creators changed";
+  if (p === "updateAuthority") return "update authority changed";
+  if (p === "primarySaleHappened") return "marked as sold";
+  if (p === "sellerFeeBasisPoints" || p === "seller_fee_basis_points") return "royalty changed";
+  if (p === "image") return "art re-hosted";
+  if (p === "attributes.❤️") return "❤️ count changed";
+  if (p.startsWith("attributes.")) return `${p.slice("attributes.".length)} changed`;
+  if (p === "isMutable") return "lock setting changed";
+  if (p === "collection") return "collection changed";
+  if (p === "name" || p === "symbol" || p === "description") return `${p} changed`;
+  return "other details changed";
 }
 
 // --- Small helpers ---
@@ -250,12 +338,12 @@ function h(tag: string, attrs: Record<string, string> = {}, ...children: Child[]
   return el;
 }
 
-function short(value: string): HTMLElement {
-  return h("span", { class: "addr", title: value }, value.length > 12 ? `${value.slice(0, 4)}…${value.slice(-4)}` : value);
+function hasSwap(step: Step): boolean {
+  return step.diff.some((c) => c.tag === "swap");
 }
 
-function code(value: string): HTMLElement {
-  return h("code", { title: value }, short(value));
+function short(value: string): HTMLElement {
+  return h("span", { class: "addr", title: value }, value.length > 12 ? `${value.slice(0, 4)}…${value.slice(-4)}` : value);
 }
 
 function solscan(kind: "tx" | "token", id: string): HTMLElement {
@@ -281,17 +369,57 @@ function isHttp(url: string): boolean {
   }
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 function safeLink(url: string, text: string): Child {
   return isHttp(url) ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text) : text;
 }
 
 function thumb(url: string | null, alt: string, cls = ""): HTMLElement {
-  if (!url || !isHttp(url)) return h("div", { class: `thumb empty ${cls}` }, "no image");
-  return h("img", { class: `thumb ${cls}`, src: url, alt, loading: "lazy", referrerpolicy: "no-referrer" });
+  if (!url || !isHttp(url)) return h("div", { class: `thumb empty ${cls}` }, "No image");
+  return h("img", { class: `thumb ${cls}`, src: url, alt, loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
 }
 
 function join(nodes: HTMLElement[]): Child[] {
   return nodes.flatMap((n, i) => (i === 0 ? [n] : [", ", n]));
+}
+
+function unique(items: string[]): string[] {
+  return [...new Set(items)];
+}
+
+function listJoin(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function sentence(s: string): string {
+  const t = capitalise(s.trim());
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function shortDate(blockTime: number | null): string {
+  if (blockTime === null) return "Now";
+  return new Date(blockTime * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function longDate(blockTime: number | null): string {
+  if (blockTime === null || Number.isNaN(blockTime)) return "";
+  return new Date(blockTime * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 function fmt(v: unknown): string {
