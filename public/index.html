@@ -3,24 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DTP History</title>
+    <title>Trash Panda Check</title>
+    <meta name="description" content="Has this Degenerate Trash Panda's art or traits changed since mint?" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦝</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap"
+    />
     <link rel="stylesheet" href="./style.css" />
     <script type="module" src="./app.ts"></script>
   </head>
   <body>
-    <main>
-      <header>
-        <h1>Panda history</h1>
-        <p class="sub">Degenerate Trash Pandas: has this Panda's art or traits changed since mint?</p>
-      </header>
-      <form id="lookup">
-        <label for="q">Panda # or mint address</label>
-        <div class="row">
-          <input id="q" name="n" autocomplete="off" spellcheck="false" placeholder="6872" required />
-          <button type="submit">Go</button>
-        </div>
-      </form>
-      <section id="result" aria-live="polite"></section>
-    </main>
+    <header class="band">
+      <div class="band-inner">
+        <a class="wordmark" href="/">Trash Panda Check</a>
+        <form id="lookup" class="search" role="search">
+          <label for="q">Panda number or mint address</label>
+          <div class="search-row">
+            <input id="q" name="n" autocomplete="off" spellcheck="false" inputmode="text" placeholder="6872" required />
+            <button type="submit">Check</button>
+          </div>
+        </form>
+      </div>
+    </header>
+    <main id="result" aria-live="polite"></main>
   </body>
 </html>
