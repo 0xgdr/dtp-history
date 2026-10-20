@@ -171,7 +171,58 @@ function renderTraits(r: HistoryResult): HTMLElement {
       return row(titleCase(t), mint.get(t) ?? "none", c ? `now ${c.to ?? "missing"}` : same(), Boolean(c));
     }),
     row("Art", r.original.image ? safeLink(r.original.image, "original image") : "none", imageStatus, Boolean(imageChange)),
+    exaltedRow(r, mint.get(EXALTED) ?? null),
   );
+}
+
+// Some Pandas carry an exalted attribute (EXALTED_STAT), part of DTP's history and usually
+// added after mint. It's shown alongside the traits but doesn't affect the verdict.
+const EXALTED = "EXALTED_STAT";
+
+function exaltedRow(r: HistoryResult, atMint: string | null): Node | string {
+  const now = readTraits(r.steps.at(-1)?.json ?? null).values.get(EXALTED) ?? null;
+  if (atMint === null && now === null) return "";
+  // Early on, an exalted attribute was its own trait ("TELL_ME_A_JOKE": "Mint Date") before it
+  // moved into EXALTED_STAT, so "added" is the first step with either form.
+  const names = exaltedNames(r);
+  const has = (s: Step) => [...readTraits(s.json).values.keys()].some((k) => k === EXALTED || names.has(k));
+  const changedAt =
+    atMint === null ? r.steps.find(has) : r.steps.findLast((s) => s.diff.some((c) => c.path === `attributes.${EXALTED}`));
+  const when = changedAt ? ` ${shortDate(changedAt.blockTime)}` : "";
+  const status =
+    atMint === now
+      ? h("span", { class: "same", title: "Same as at mint" }, "✓")
+      : atMint === null
+        ? `added${when}`
+        : now === null
+          ? `removed${when}`
+          : `changed${when}`;
+  return h(
+    "div",
+    { class: "trait exalted" },
+    h("dt", {}, "Exalted"),
+    h("dd", {}, prettyExalted(now ?? atMint ?? "")),
+    h("dd", { class: "status" }, status),
+  );
+}
+
+// Stat names seen in EXALTED_STAT values ("TELL_ME_A_JOKE: Mint Date" -> TELL_ME_A_JOKE), so the
+// older one-trait form can be recognised in the history.
+function exaltedNames(r: HistoryResult): Set<string> {
+  const names = new Set<string>();
+  for (const step of r.steps) {
+    const value = readTraits(step.json).values.get(EXALTED);
+    const name = value?.split(":")[0]?.trim().toUpperCase();
+    if (name) names.add(name);
+  }
+  return names;
+}
+
+// "TELL_ME_A_JOKE: Mint Date" -> "Tell me a joke: Mint Date"
+function prettyExalted(value: string): string {
+  const [stat = "", ...rest] = value.split(":");
+  const name = capitalise(stat.trim().replaceAll("_", " ").toLowerCase());
+  return rest.length ? `${name}:${rest.join(":")}` : name;
 }
 
 function renderCompare(r: HistoryResult): HTMLElement {
@@ -185,7 +236,8 @@ function renderCompare(r: HistoryResult): HTMLElement {
 
 function renderTimeline(r: HistoryResult): HTMLElement {
   const swapSteps = r.steps.filter(hasSwap).length;
-  const list = h("ol", { class: "timeline" }, ...r.steps.map(renderStep));
+  const names = exaltedNames(r);
+  const list = h("ol", { class: "timeline" }, ...r.steps.map((step) => renderStep(step, names)));
   const empty = h("p", { class: "empty" }, "No update ever touched the art or the six traits.");
 
   // On by default: the full history is one click away.
@@ -219,15 +271,17 @@ function historySummary(updates: number, swaps: number): string {
   return `${updates} ${updates === 1 ? "update" : "updates"} since mint; ${touched} the art or traits.`;
 }
 
-function renderStep(step: Step): HTMLElement {
+function renderStep(step: Step, exalted: Set<string>): HTMLElement {
   const swaps = step.diff.filter((c) => c.tag === "swap");
   const cosmetic = step.diff.filter((c) => c.tag === "cosmetic");
+  const artChanged = swaps.some((c) => c.path === "image");
+  const others = listJoin(unique(cosmeticPhrases(cosmetic, exalted)).filter((p) => !(artChanged && p === "art re-hosted")));
   const summary =
     swaps.length > 0
-      ? `Changed ${listJoin(swaps.map(swapName))}`
+      ? `Changed ${listJoin(swaps.map(swapName))}${others ? `; also ${others}` : ""}`
       : step.index === 0
         ? "Starting art and traits"
-        : capitalise(listJoin(unique(cosmetic.map(cosmeticPhrase)))) || "No visible change";
+        : capitalise(others) || "No visible change";
 
   return h(
     "li",
@@ -311,6 +365,26 @@ function swapName(c: Change): string {
   return c.path === "image" ? "the art" : titleCase(c.path.replace(/^attributes\./, ""));
 }
 
+function cosmeticPhrases(changes: Change[], exalted: Set<string>): string[] {
+  const isOldForm = (c: Change) => exalted.has(c.path.replace(/^attributes\./, "").toUpperCase());
+  const stat = changes.find((c) => c.path === `attributes.${EXALTED}`);
+  const oldForm = changes.filter(isOldForm);
+  const renamed = stat?.from === "missing" && oldForm.some((c) => c.to === "missing");
+
+  const phrases: string[] = [];
+  if (renamed) phrases.push("exalted attribute renamed");
+  else if (stat) phrases.push(stat.from === "missing" ? "exalted attribute added" : stat.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
+  for (const c of oldForm) {
+    if (renamed && c.to === "missing") continue;
+    phrases.push(c.from === "missing" ? "exalted attribute added" : c.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
+  }
+  for (const c of changes) {
+    if (c === stat || isOldForm(c)) continue;
+    phrases.push(cosmeticPhrase(c));
+  }
+  return phrases;
+}
+
 function cosmeticPhrase(c: Change): string {
   const p = c.path;
   if (p === "uri") return c.label === "URI host move" ? "metadata re-hosted" : "new metadata file";
@@ -318,7 +392,7 @@ function cosmeticPhrase(c: Change): string {
   if (p === "updateAuthority") return "update authority changed";
   if (p === "primarySaleHappened") return "marked as sold";
   if (p === "sellerFeeBasisPoints" || p === "seller_fee_basis_points") return "royalty changed";
-  if (p === "image") return "art re-hosted";
+  if (p === "image" || p === "properties.files") return "art re-hosted";
   if (p === "attributes.❤️") return "❤️ count changed";
   if (p.startsWith("attributes.")) return `${p.slice("attributes.".length)} changed`;
   if (p === "isMutable") return "lock setting changed";
