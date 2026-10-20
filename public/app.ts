@@ -42,7 +42,7 @@ async function load(q: string): Promise<void> {
       "div",
       { class: "notice loading" },
       h("span", { class: "spinner", "aria-hidden": "true" }),
-      h("p", {}, "Digging through this Panda's transactions. The first look can take up to a minute; after that it's instant."),
+      h("p", {}, "Digging through this Panda's dumpster. The first look can take up to a minute; after that it's instant."),
     ),
   );
   try {
