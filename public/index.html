@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DTP History</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.ts"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Panda history</h1>
+      <form id="lookup">
+        <label for="q">Panda # or mint address</label>
+        <input id="q" name="n" autocomplete="off" required />
+        <button type="submit">Go</button>
+      </form>
+      <section id="result" aria-live="polite"></section>
+    </main>
+  </body>
+</html>
