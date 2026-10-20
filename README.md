@@ -27,12 +27,28 @@ bun run dev        # server with hot reload (Bun HTML imports bundle public/)
 bun run start      # production mode
 bun test           # offline unit tests on test/fixtures
 bun run typecheck
+bun run index      # rebuild data/panda-index.json (needs a DAS-capable RPC_URL, e.g. Helius)
 bun run fixtures   # re-record test/fixtures/6872 (needs RPC_URL)
 ```
 
 The page is a plain `public/index.html` imported by `src/server.ts` and passed to
 `Bun.serve({ routes })`. Bun bundles its `<script>` and `<link>` tags on request; no separate
 build step.
+
+## API
+
+| Route | |
+|---|---|
+| `GET /api/panda/:n` | Panda number (`6872`, `#6872`, `006872`) or a mint. Needs `data/panda-index.json`. |
+| `GET /api/mint/:mint` | Any mint. Warns when it is not a verified DTP. |
+| `GET /healthz` | `ok` |
+
+Errors are JSON `{error, detail}`: 400 bad input, 404 not in the index or missing, 409 duplicate
+number (with `candidates`), 502 RPC failed after retries, 503 index not built.
+
+The first uncached history takes a while: about a minute on the public RPC (it rate-limits
+`getTransaction` hard), much less with a paid endpoint. Later requests check for one new
+signature and serve the cache.
 
 ## Fixtures
 
