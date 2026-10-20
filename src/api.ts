@@ -1,8 +1,12 @@
-import { buildHistory, type Deps, type HistoryResult } from "./history.ts";
+import { buildHistory, readCachedHistory, type Deps, type HistoryResult } from "./history.ts";
 import { parseInput, resolve, type PandaIndex } from "./index-lookup.ts";
 import { RpcError } from "./rpc.ts";
 
-type ApiDeps = Deps & { index: PandaIndex | null };
+type ApiDeps = Deps & {
+  index: PandaIndex | null;
+  // How often a cached history is re-checked against chain in the background.
+  revalidateMs?: number;
+};
 
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
@@ -17,9 +21,24 @@ export function createApi(deps: ApiDeps) {
     return p;
   };
 
+  // Stale-while-revalidate: a cached history is returned at once, and at most once per
+  // `revalidateMs` a background build picks up any new signatures for the next request.
+  const revalidateMs = deps.revalidateMs ?? 60_000;
+  const lastChecked = new Map<string, number>();
+  const cachedOrBuild = async (mint: string): Promise<HistoryResult> => {
+    const cached = await readCachedHistory(mint, deps.cache);
+    if (!cached) return history(mint);
+    const now = Date.now();
+    if (now - (lastChecked.get(mint) ?? 0) >= revalidateMs) {
+      lastChecked.set(mint, now);
+      history(mint).catch((err) => console.error("revalidate failed:", err instanceof Error ? err.message : err));
+    }
+    return cached;
+  };
+
   async function respond(mint: string, number: number | null): Promise<Response> {
     try {
-      const result = await history(mint);
+      const result = await cachedOrBuild(mint);
       return Response.json(number !== null ? { ...result, number } : result);
     } catch (err) {
       if (err instanceof RpcError) return error(502, "rpc_failed", "the Solana RPC failed after retries");

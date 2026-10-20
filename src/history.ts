@@ -72,6 +72,11 @@ const EMPTY_STATE: ChainState = {
   collection: null,
 };
 
+// The last finished history for a mint, without touching the RPC.
+export async function readCachedHistory(mint: string, cache: Cache): Promise<HistoryResult | null> {
+  return (await cache.get<CachedHistory>("history", mint))?.result ?? null;
+}
+
 export async function buildHistory(mint: string, deps: Deps): Promise<HistoryResult> {
   const { rpc, fetcher, cache } = deps;
   const pda = await metadataPda(mint);

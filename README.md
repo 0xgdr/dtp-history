@@ -17,6 +17,7 @@ cp .env.example .env   # then set RPC_URL
 |---|---|---|
 | `RPC_URL` | public mainnet RPC | Full endpoint including any provider key (e.g. Helius `?api-key=`). Secret: never logged, only its host. |
 | `RPC_RPS` | `8` | Token-bucket rate limit for RPC calls. |
+| `RPC_CONCURRENCY` | `4` | RPC calls in flight at once. |
 | `CACHE_DIR` | `.cache` | File cache (gitignored). |
 | `PORT` | `3000` | |
 
@@ -47,8 +48,12 @@ Errors are JSON `{error, detail}`: 400 bad input, 404 not in the index or missin
 number (with `candidates`), 502 RPC failed after retries, 503 index not built.
 
 The first uncached history takes a while: about a minute on the public RPC (it rate-limits
-`getTransaction` hard), much less with a paid endpoint. Later requests check for one new
-signature and serve the cache.
+`getTransaction` hard), a few seconds with Helius. After that, a Panda is served from the cache
+at once and re-checked against chain in the background, at most once a minute.
+
+## Deploy
+
+Railway: see `ops/railway.md`.
 
 ## Fixtures
 

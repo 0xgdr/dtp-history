@@ -12,7 +12,7 @@ const pandaIndex = await loadIndex(`${import.meta.dir}/../data/panda-index.json`
 if (!pandaIndex) console.warn("data/panda-index.json not found: number lookups are off until `bun run index`");
 
 const api = createApi({
-  rpc: createRpc(config.rpcUrl, { rps: config.rpcRps }),
+  rpc: createRpc(config.rpcUrl, { rps: config.rpcRps, concurrency: config.rpcConcurrency }),
   fetcher: createFetcher(cache),
   cache,
   index: pandaIndex,
