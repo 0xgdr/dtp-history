@@ -235,6 +235,35 @@ main {
   border-radius: var(--radius);
 }
 
+/* Spinner on the placeholder while an image loads. It waits 300 ms before showing, so fast
+   or cached images never flash it. */
+.thumb.loading {
+  position: relative;
+}
+
+.thumb.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 3px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  opacity: 0;
+  animation:
+    show 200ms 300ms forwards,
+    spin 0.8s linear infinite;
+}
+
+@keyframes show {
+  to {
+    opacity: 0.7;
+  }
+}
+
 .thumb-img {
   display: block;
   width: 100%;
@@ -251,6 +280,10 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .thumb-img {
     transition: none;
+  }
+
+  .thumb.loading::after {
+    animation-duration: 200ms, 3s;
   }
 }
 
@@ -315,6 +348,7 @@ main {
 
 .hero-text {
   min-width: 0;
+  container-type: inline-size;
 }
 
 .collection {
@@ -325,7 +359,8 @@ main {
 
 .number {
   margin: 0;
-  font-size: clamp(4rem, 13vw, 8.5rem);
+  /* Sized to the column so the widest number (#19999) always fits. */
+  font-size: clamp(3rem, 20cqi, 8.5rem);
   font-weight: 900;
   font-variation-settings: "wdth" 125;
   letter-spacing: -0.03em;
