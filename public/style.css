@@ -254,7 +254,45 @@ td {
   border-bottom: 1px solid var(--border);
 }
 
+tr.changed td {
+  color: var(--swap);
+  font-weight: 600;
+}
+
 /* Timeline */
+
+.timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 32px 0 12px;
+}
+
+.timeline-head h2 {
+  margin: 0;
+}
+
+.toggle {
+  display: inline;
+  margin: 0;
+  font-weight: 400;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.timeline.only-swaps .step:not(.has-swap) {
+  display: none;
+}
+
+.other-changes {
+  margin-top: 4px;
+}
+
+.other-changes .chips {
+  margin-top: 6px;
+}
 
 .timeline {
   list-style: none;
