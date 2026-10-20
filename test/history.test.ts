@@ -206,4 +206,29 @@ describe("API", () => {
     expect(res.status).toBe(502);
     expect(await res.text()).not.toContain("rpc.example");
   });
+
+  test("cached histories are served without waiting on the RPC, then revalidated in the background", async () => {
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+    const { rpc, calls } = await fixtureRpc();
+    const a = createApi({ rpc, fetcher, cache, index, revalidateMs: 60_000 });
+
+    expect((await a.mint(MINT_6872)).status).toBe(200); // cold: full build
+    const coldCalls = calls.length;
+
+    // Warm: the RPC hangs, but the cached answer still comes straight back.
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const slow: Rpc = { call: async (m, p) => (await gate, rpc.call(m, p)) };
+    const b = createApi({ rpc: slow, fetcher, cache, index, revalidateMs: 60_000 });
+    const warm = await b.mint(MINT_6872);
+    expect(warm.status).toBe(200);
+    expect(((await warm.json()) as { verdict: string }).verdict).toBe("Original");
+
+    // A second request inside the window does not start another check.
+    await b.mint(MINT_6872);
+    release();
+    await Bun.sleep(10);
+    expect(calls.length).toBe(coldCalls + 1); // one getSignaturesForAddress(limit 1) from the single revalidate
+  });
 });

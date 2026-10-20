@@ -3,6 +3,7 @@ const PUBLIC_RPC = "https://api.mainnet-beta.solana.com";
 export type Config = {
   rpcUrl: string;
   rpcRps: number;
+  rpcConcurrency: number;
   cacheDir: string;
   port: number;
 };
@@ -12,6 +13,7 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     // RPC_URL carries the provider key (e.g. Helius `?api-key=`), so it is a secret.
     rpcUrl: env.RPC_URL?.trim() || PUBLIC_RPC,
     rpcRps: positiveNumber(env.RPC_RPS, 8),
+    rpcConcurrency: positiveNumber(env.RPC_CONCURRENCY, 4),
     cacheDir: env.CACHE_DIR?.trim() || ".cache",
     port: positiveNumber(env.PORT, 3000),
   };
