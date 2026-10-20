@@ -20,6 +20,7 @@ cp .env.example .env   # then set RPC_URL
 | `RPC_CONCURRENCY` | `4` | RPC calls in flight at once. |
 | `CACHE_DIR` | `.cache` | File cache (gitignored). |
 | `PORT` | `3000` | |
+| `PUBLIC_URL` | request's host | Site origin used in share-card URLs. Only needed if the host can't be read from the request. |
 
 ## Scripts
 
@@ -43,6 +44,7 @@ build step.
 | `GET /api/panda/:n` | Panda number (`6872`, `#6872`, `006872`) or a mint. Needs `data/panda-index.json`. |
 | `GET /api/mint/:mint` | Any mint. Warns when it is not a verified DTP. |
 | `GET /healthz` | `ok` |
+| `GET /og.png` | Share card (1200×630) |
 
 Errors are JSON `{error, detail}`: 400 bad input, 404 not in the index or missing, 409 duplicate
 number (with `candidates`), 502 RPC failed after retries, 503 index not built.

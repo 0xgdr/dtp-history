@@ -6,6 +6,7 @@ export type Config = {
   rpcConcurrency: number;
   cacheDir: string;
   port: number;
+  publicUrl: string | null;
 };
 
 export function loadConfig(env: Record<string, string | undefined> = Bun.env): Config {
@@ -16,6 +17,8 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     rpcConcurrency: positiveNumber(env.RPC_CONCURRENCY, 4),
     cacheDir: env.CACHE_DIR?.trim() || ".cache",
     port: positiveNumber(env.PORT, 3000),
+    // Site origin for share-card URLs. Unset: taken from each request's host.
+    publicUrl: env.PUBLIC_URL?.trim().replace(/\/+$/, "") || null,
   };
 }
 

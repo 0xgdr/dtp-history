@@ -5,6 +5,7 @@ import { createApi } from "./api.ts";
 import { loadIndex } from "./index-lookup.ts";
 import { createFetcher } from "./json-fetch.ts";
 import { createRpc } from "./rpc.ts";
+import { siteOrigin, withShareTags } from "./share.ts";
 
 const config = loadConfig();
 const cache = fileCache(config.cacheDir);
@@ -18,19 +19,35 @@ const api = createApi({
   index: pandaIndex,
 });
 
+const production = Bun.env.NODE_ENV === "production";
+const ogImage = Bun.file(`${import.meta.dir}/../public/og.png`);
+
+// The bundled page, fetched once from its own route in production (every time in development,
+// so hot reload still sees changes). "/" serves it with the share-card URLs filled in.
+let pageHtml: string | null = null;
+async function page(req: Request): Promise<Response> {
+  if (!pageHtml || !production) pageHtml = await (await fetch(new URL("/_page", server.url))).text();
+  const url = new URL(req.url);
+  const html = await withShareTags(pageHtml, siteOrigin(req, config.publicUrl), url.pathname + url.search);
+  return new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } });
+}
+
 // HTML import: Bun bundles the page's <script> and <link> tags itself, with hot reload under
 // `bun --hot`.
 const server = Bun.serve({
   port: config.port,
   idleTimeout: 120, // uncached histories can take 10–30 s
   routes: {
-    "/": index,
+    "/": page,
+    "/_page": index,
+    "/og.png": () =>
+      new Response(ogImage, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } }),
     "/healthz": new Response("ok"),
     "/api/panda/:n": { GET: (req) => api.panda(req.params.n) },
     "/api/mint/:mint": { GET: (req) => api.mint(req.params.mint) },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
-  development: Bun.env.NODE_ENV !== "production" && { hmr: true, console: true },
+  development: !production && { hmr: true, console: true },
 });
 
 console.log(`Listening on ${server.url}`);
