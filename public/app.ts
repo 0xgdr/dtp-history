@@ -381,9 +381,13 @@ function safeLink(url: string, text: string): Child {
   return isHttp(url) ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text) : text;
 }
 
+// The frame holds the grey placeholder; the image fades in over it once it has loaded.
 function thumb(url: string | null, alt: string, cls = ""): HTMLElement {
   if (!url || !isHttp(url)) return h("div", { class: `thumb empty ${cls}` }, "No image");
-  return h("img", { class: `thumb ${cls}`, src: url, alt, loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
+  const img = h("img", { class: "thumb-img", alt, loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
+  img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+  img.setAttribute("src", url);
+  return h("div", { class: `thumb ${cls}` }, img);
 }
 
 function join(nodes: HTMLElement[]): Child[] {
