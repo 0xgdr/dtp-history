@@ -9,11 +9,16 @@
   </head>
   <body>
     <main>
-      <h1>Panda history</h1>
+      <header>
+        <h1>Panda history</h1>
+        <p class="sub">Degenerate Trash Pandas: has this Panda's art or traits changed since mint?</p>
+      </header>
       <form id="lookup">
         <label for="q">Panda # or mint address</label>
-        <input id="q" name="n" autocomplete="off" required />
-        <button type="submit">Go</button>
+        <div class="row">
+          <input id="q" name="n" autocomplete="off" spellcheck="false" placeholder="6872" required />
+          <button type="submit">Go</button>
+        </div>
       </form>
       <section id="result" aria-live="polite"></section>
     </main>
