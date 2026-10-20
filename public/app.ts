@@ -64,11 +64,11 @@ function renderWelcome(): HTMLElement {
   return h(
     "section",
     { class: "welcome" },
-    h("h1", {}, "Check your Panda's art and traits"),
+    h("h1", {}, "Check your Panda's art & traits"),
     h(
       "p",
       {},
-      "Enter a Degen Trash Panda number to compare its art and six traits today with the day it was minted.",
+      "Enter a Degen Trash Panda number to compare its art & six traits today with the day it was minted.",
     ),
     h("p", {}, "Try ", lookupLink("15700", "#15700"), "."),
   );
