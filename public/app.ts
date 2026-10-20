@@ -68,12 +68,16 @@ function renderHistory(r: HistoryResult): Node[] {
   const nodes: Node[] = [renderVerdict(r), renderTraits(r)];
   const swapSteps = r.steps.filter(hasSwap).length;
   const timeline = h("ol", { class: "timeline" }, ...r.steps.map(renderStep));
-  const empty = h("p", { class: "muted", hidden: "" }, "No step changed the traits or the art.");
+  const empty = h("p", { class: "muted" }, "No step changed the traits or the art.");
+  // On by default: the full history is one click away.
   const toggle = h("input", { type: "checkbox", id: "only-swaps" }) as HTMLInputElement;
-  toggle.addEventListener("change", () => {
+  toggle.checked = true;
+  const applyToggle = () => {
     timeline.classList.toggle("only-swaps", toggle.checked);
     empty.hidden = !(toggle.checked && swapSteps === 0);
-  });
+  };
+  toggle.addEventListener("change", applyToggle);
+  applyToggle();
   nodes.push(
     h(
       "div",
