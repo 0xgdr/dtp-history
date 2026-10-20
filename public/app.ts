@@ -70,7 +70,7 @@ function renderWelcome(): HTMLElement {
       {},
       "Enter a Degen Trash Panda number. We rebuild its metadata history from Solana and compare today's art and six traits with the day it was minted.",
     ),
-    h("p", {}, "Try ", lookupLink("6872", "#6872"), "."),
+    h("p", {}, "Try ", lookupLink("15700", "#15700"), "."),
   );
 }
 
