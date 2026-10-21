@@ -1,4 +1,4 @@
-import { buildHistory, readCachedHistory, type Deps, type HistoryResult } from "./history.ts";
+import { buildHistory, readCachedHistory, type BuildProgress, type Deps, type HistoryResult } from "./history.ts";
 import { parseInput, resolve, type PandaIndex } from "./index-lookup.ts";
 import { RpcError } from "./rpc.ts";
 
@@ -6,18 +6,36 @@ type ApiDeps = Deps & {
   index: PandaIndex | null;
   // How often a cached history is re-checked against chain in the background.
   revalidateMs?: number;
+  // How long a request waits for a new build before answering "still building" (202) instead.
+  // The first request waits longer; follow-up polls answer quickly.
+  firstWaitMs?: number;
+  pollWaitMs?: number;
 };
+
+const FAILURE_TTL_MS = 60_000;
 
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
   let numbers: number[] | undefined;
 
-  // Concurrent requests for the same mint share one build.
+  // Concurrent requests for the same mint share one build. Builds report progress, and a build
+  // that fails is remembered briefly so the next poll reports it instead of quietly starting over.
   const inflight = new Map<string, Promise<HistoryResult>>();
+  const progress = new Map<string, BuildProgress>();
+  const failures = new Map<string, { err: unknown; at: number }>();
   const history = (mint: string): Promise<HistoryResult> => {
     let p = inflight.get(mint);
     if (!p) {
-      p = buildHistory(mint, deps).finally(() => inflight.delete(mint));
+      p = buildHistory(mint, { ...deps, onProgress: (pr) => progress.set(mint, pr) })
+        .catch((err) => {
+          failures.set(mint, { err, at: Date.now() });
+          throw err;
+        })
+        .finally(() => {
+          inflight.delete(mint);
+          progress.delete(mint);
+        });
+      p.catch(() => {}); // a poll may have stopped waiting; the failure is kept above
       inflight.set(mint, p);
     }
     return p;
@@ -27,9 +45,17 @@ export function createApi(deps: ApiDeps) {
   // `revalidateMs` a background build picks up any new signatures for the next request.
   const revalidateMs = deps.revalidateMs ?? 60_000;
   const lastChecked = new Map<string, number>();
-  const cachedOrBuild = async (mint: string): Promise<HistoryResult> => {
+  const cachedOrBuild = async (mint: string): Promise<HistoryResult | "building"> => {
     const cached = await readCachedHistory(mint, deps.cache);
-    if (!cached) return history(mint);
+    if (!cached) {
+      const failed = failures.get(mint);
+      if (failed) {
+        failures.delete(mint);
+        if (Date.now() - failed.at < FAILURE_TTL_MS) throw failed.err;
+      }
+      const wait = inflight.has(mint) ? (deps.pollWaitMs ?? 1500) : (deps.firstWaitMs ?? 15_000);
+      return Promise.race([history(mint), Bun.sleep(wait).then(() => "building" as const)]);
+    }
     const now = Date.now();
     if (now - (lastChecked.get(mint) ?? 0) >= revalidateMs) {
       lastChecked.set(mint, now);
@@ -41,6 +67,13 @@ export function createApi(deps: ApiDeps) {
   async function respond(mint: string, number: number | null): Promise<Response> {
     try {
       const result = await cachedOrBuild(mint);
+      if (result === "building") {
+        // Long history: answer now with how far the build has got; the page polls again.
+        return Response.json(
+          { status: "building", ...(progress.get(mint) ?? { phase: "signatures", done: 0, total: null }) },
+          { status: 202, headers: { "cache-control": "no-store", "retry-after": "2" } },
+        );
+      }
       return Response.json(number !== null ? { ...result, number } : result);
     } catch (err) {
       if (err instanceof RpcError) return error(502, "rpc_failed", "the Solana RPC failed after retries");

@@ -7,6 +7,8 @@ import type { HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
+// A 202 from the API: the history is still being built.
+type Building = { status: "building"; phase: "signatures" | "transactions" | "metadata"; done: number; total: number | null };
 
 const form = document.querySelector<HTMLFormElement>("#lookup")!;
 const input = document.querySelector<HTMLInputElement>("#q")!;
@@ -36,24 +38,35 @@ async function load(q: string): Promise<void> {
   inflight?.abort();
   const controller = new AbortController();
   inflight = controller;
-  result.replaceChildren(renderLoading(q));
+  const view = loadingView(q);
+  result.replaceChildren(view.el);
   try {
-    const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
-    const body = (await res.json()) as HistoryResult | ApiError;
+    // Long histories answer 202 with progress; keep asking until the result is ready.
+    for (;;) {
+      const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
+      const body = (await res.json()) as HistoryResult | ApiError | Building;
+      if (controller.signal.aborted) return;
+      if (res.status === 202 && "status" in body && body.status === "building") {
+        view.show(body);
+        await new Promise((r) => setTimeout(r, 2000));
+        if (controller.signal.aborted) return;
+        continue;
+      }
+      result.replaceChildren(
+        ...("error" in body ? [renderProblem(q, problemFor(res.status, body, q))] : renderHistory(body as HistoryResult)),
+      );
+      return;
+    }
+  } catch {
     if (controller.signal.aborted) return;
-    result.replaceChildren(...("error" in body ? renderError(body) : renderHistory(body)));
-  } catch (err) {
-    if (controller.signal.aborted) return;
-    result.replaceChildren(
-      h("div", { class: "notice error" }, h("p", {}, `The check didn't finish: ${err instanceof Error ? err.message : err}. Try again.`)),
-    );
+    result.replaceChildren(renderProblem(q, problemFor(0, null, q)));
   }
 }
 
 // --- Rendering ---
 
-// What the server does for a lookup, shown in turn while it works. The server answers in one go,
-// so these describe the work rather than track progress.
+// What the server does for a lookup, shown in turn while it works. Once the server reports real
+// progress (long histories), the counts replace these.
 const DIG_STEPS = [
   "Lifting the dumpster lid",
   "Digging through every metadata update",
@@ -64,27 +77,38 @@ const DIG_STEPS = [
 ];
 
 // A row of blocks joined by a thin line, with a pulse travelling along it: the history being read
-// off the chain, block by block.
-function signal(): SVGSVGElement {
+// off the chain, block by block. Broken: still, with a gap in the line and the middle block red.
+function signal(broken = false): SVGSVGElement {
   const NS = "http://www.w3.org/2000/svg";
   const count = 9;
   const size = 10;
   const gap = 16;
   const width = count * size + (count - 1) * gap;
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("class", "signal");
+  svg.setAttribute("class", broken ? "signal broken" : "signal");
   svg.setAttribute("viewBox", `0 0 ${width} ${size}`);
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", String(size));
   svg.setAttribute("aria-hidden", "true");
-  const line = document.createElementNS(NS, "line");
-  line.setAttribute("x1", "0");
-  line.setAttribute("x2", String(width));
-  line.setAttribute("y1", String(size / 2));
-  line.setAttribute("y2", String(size / 2));
-  svg.append(line);
+  const middle = Math.floor(count / 2);
+  const snap = middle * (size + gap); // left edge of the middle block
+  const segments: [number, number][] = broken
+    ? [
+        [0, snap - gap / 2 - 2],
+        [snap + size + gap / 2 + 2, width],
+      ]
+    : [[0, width]];
+  for (const [x1, x2] of segments) {
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", String(x1));
+    line.setAttribute("x2", String(x2));
+    line.setAttribute("y1", String(size / 2));
+    line.setAttribute("y2", String(size / 2));
+    svg.append(line);
+  }
   for (let i = 0; i < count; i++) {
     const block = document.createElementNS(NS, "rect");
+    if (broken && i === middle) block.setAttribute("class", "snapped");
     block.setAttribute("x", String(i * (size + gap)));
     block.setAttribute("width", String(size));
     block.setAttribute("height", String(size));
@@ -95,25 +119,48 @@ function signal(): SVGSVGElement {
   return svg;
 }
 
-function renderLoading(q: string): HTMLElement {
+// "#118" for a number, a shortened address for a mint.
+function lookupLabel(q: string): string {
   const trimmed = q.trim().replace(/^#\s*/, "");
-  const label = /^\d+$/.test(trimmed) ? `#${Number(trimmed)}` : shortenAddresses(trimmed);
+  return /^\d+$/.test(trimmed) ? `#${Number(trimmed)}` : shortenAddresses(trimmed);
+}
+
+function loadingView(q: string): { el: HTMLElement; show: (p: Building) => void } {
+  const label = lookupLabel(q);
+  const bar = signal();
   const status = h("p", { class: "dig-status", role: "status" }, `${DIG_STEPS[0]}…`);
-  const box = h(
-    "section",
-    { class: "dig" },
-    signal(),
-    h("p", { class: "dig-number" }, label),
-    status,
-    h("p", { class: "dig-note" }, "The first look can take up to a minute."),
-  );
+  const note = h("p", { class: "dig-note" }, "The first look can take up to a minute.");
+  const box = h("section", { class: "dig" }, bar, h("p", { class: "dig-number" }, label), status, note);
   let i = 0;
   const timer = setInterval(() => {
     if (!box.isConnected) return clearInterval(timer);
     i = Math.min(i + 1, DIG_STEPS.length - 1);
     status.textContent = `${DIG_STEPS[i]}…`;
   }, 2800);
-  return box;
+
+  // Real progress: counts in the status line, and the blocks fill up as transactions are read.
+  const show = (p: Building) => {
+    clearInterval(timer);
+    const n = (x: number) => x.toLocaleString("en-GB");
+    status.textContent =
+      p.phase === "signatures"
+        ? `Listing transactions: ${n(p.done)} so far…`
+        : p.phase === "transactions"
+          ? `Reading transactions: ${n(p.done)} of ${n(p.total ?? 0)}…`
+          : `Fetching metadata files: ${n(p.done)} of ${n(p.total ?? 0)}…`;
+    if (p.phase !== "metadata" && (p.total ?? p.done) > 500) {
+      note.textContent = "This Panda has a long history, so this one takes a few minutes. You can leave this tab open.";
+    }
+    const blocks = [...bar.querySelectorAll("rect")];
+    const fraction = p.phase === "metadata" ? 1 : p.phase === "transactions" && p.total ? p.done / p.total : 0;
+    const lit = Math.min(blocks.length, Math.floor(fraction * blocks.length));
+    bar.classList.add("progress");
+    blocks.forEach((b, k) => {
+      b.classList.toggle("lit", k < lit);
+      b.classList.toggle("next", k === lit);
+    });
+  };
+  return { el: box, show };
 }
 
 function renderWelcome(): HTMLElement {
@@ -130,15 +177,60 @@ function renderWelcome(): HTMLElement {
   );
 }
 
-function renderError(body: ApiError): Node[] {
-  const box = h("div", { class: "notice error" }, h("p", {}, sentence(body.detail)));
-  if (body.candidates?.length) {
-    box.append(
-      h("p", {}, "This number is on more than one mint. Pick one:"),
-      h("ul", {}, ...body.candidates.map((mint) => h("li", {}, lookupLink(mint, mint)))),
-    );
+type Problem = { title: string; text: string; retry?: boolean; random?: boolean; candidates?: string[] };
+
+// Turns an API error (or a dropped connection, status 0) into words for the problem screen.
+function problemFor(status: number, body: ApiError | null, q: string): Problem {
+  const label = lookupLabel(q);
+  if (status === 0) {
+    return {
+      title: "Lost the signal",
+      text: "The connection dropped before the history came back. It may still be building, so trying again often works.",
+      retry: true,
+    };
   }
-  return [box];
+  switch (body?.error) {
+    case "duplicate":
+      return { title: "Two Pandas, one number", text: `${label} is on more than one mint. Pick one:`, candidates: body.candidates };
+    case "missing":
+    case "not_found":
+      return { title: "Nothing in this dumpster", text: `${label} has no Panda in the collection.`, random: true };
+    case "bad_input":
+      return { title: "That's not a Panda", text: "Enter a Panda number like 15700, or a mint address.", random: true };
+    case "rpc_failed":
+      return { title: "The chain isn't answering", text: "The Solana RPC didn't respond after several tries. Give it a moment.", retry: true };
+    case "no_index":
+      return { title: "Number lookup is offline", text: "Panda numbers can't be looked up right now. A mint address still works." };
+    default:
+      return {
+        title: "Something broke in the dumpster",
+        text: "The history couldn't be built. Try again; if it keeps happening, it's on our side.",
+        retry: true,
+      };
+  }
+}
+
+// `onRetry` defaults to repeating the lookup; `label` replaces the big number (e.g. for the dice).
+function renderProblem(q: string, problem: Problem, onRetry = () => load(q), label = lookupLabel(q)): HTMLElement {
+  const actions: Node[] = [];
+  if (problem.retry) {
+    const retry = h("button", { type: "button", class: "retry" }, "Try again");
+    retry.addEventListener("click", onRetry);
+    actions.push(retry);
+  }
+  if (problem.random) actions.push(h("p", { class: "dig-note" }, "Or try ", randomLink(), "."));
+  return h(
+    "section",
+    { class: "dig problem", role: "alert" },
+    signal(true),
+    h("p", { class: "dig-number" }, label),
+    h("p", { class: "dig-status" }, problem.title),
+    h("p", { class: "dig-note" }, problem.text),
+    problem.candidates?.length
+      ? h("ul", { class: "candidates" }, ...problem.candidates.map((mint) => h("li", {}, lookupLink(mint, mint))))
+      : "",
+    ...actions,
+  );
 }
 
 function renderHistory(r: HistoryResult): Node[] {
@@ -501,9 +593,14 @@ async function lookupRandom(): Promise<void> {
     if (!res.ok || body.number === undefined) throw new Error(body.detail ?? `HTTP ${res.status}`);
     input.value = String(body.number);
     form.requestSubmit();
-  } catch (err) {
+  } catch {
     result.replaceChildren(
-      h("div", { class: "notice error" }, h("p", {}, `Couldn't pick a random Panda: ${err instanceof Error ? err.message : err}.`)),
+      renderProblem(
+        "",
+        { title: "The dice rolled under the bin", text: "Couldn't pick a random Panda just now.", retry: true },
+        lookupRandom,
+        "#?",
+      ),
     );
   }
 }
