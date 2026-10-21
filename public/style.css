@@ -127,6 +127,7 @@ main {
 }
 
 .search input {
+  appearance: none;
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
@@ -135,6 +136,10 @@ main {
   background: var(--card);
   border: 2px solid transparent;
   border-radius: var(--radius);
+}
+
+.search input::-webkit-search-cancel-button {
+  cursor: pointer;
 }
 
 .search button {

@@ -45,9 +45,25 @@
       <div class="band-inner">
         <a class="wordmark" href="/"><img class="logo" src="./dtp-logo.png" alt="" width="44" height="44" />Trash Panda Check</a>
         <form id="lookup" class="search" role="search">
-          <label for="q">Panda number or mint address</label>
+          <!-- Phone browsers ignore autocomplete="off" and offer contact AutoFill when a label says
+               "number" or "address", so the label avoids those words and the field is a search box. -->
+          <label for="q">Panda # or mint</label>
           <div class="search-row">
-            <input id="q" name="n" autocomplete="off" spellcheck="false" inputmode="text" placeholder="15700" required />
+            <input
+              id="q"
+              name="q"
+              type="search"
+              enterkeyhint="search"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
+              placeholder="15700"
+              required
+            />
             <button type="submit">Check</button>
           </div>
         </form>
