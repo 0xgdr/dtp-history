@@ -2,6 +2,7 @@ import { DTP_COLLECTION_MINT } from "./constants.ts";
 import type { Cache } from "./cache.ts";
 import { decodeMetadataAccount, type MetadataAccount } from "./decode/metadata-account.ts";
 import { decodeMetadataEvents, type MetadataEvent } from "./decode/metadata-ix.ts";
+import { exaltedVerdict } from "./exalted.ts";
 import { diffChain, diffJson, type Change, type ChainState } from "./diff.ts";
 import { pandaNumber } from "./index-lookup.ts";
 import type { Fetcher } from "./json-fetch.ts";
@@ -41,6 +42,8 @@ export type HistoryResult = {
   metadataPda: string;
   burned: boolean;
   verdict: Verdict;
+  // Set when the verdict is "Exalted": when the exalt changed the art.
+  exaltedAt: number | null;
   verdictChanges: VerdictChange[];
   imageCheck: ImageCheck;
   changedInHistory: boolean;
@@ -56,7 +59,11 @@ export type HistoryResult = {
   cachedAt: string;
 };
 
-type CachedHistory = { newestSig: string; signatures: SigInfo[]; result: HistoryResult };
+// Bump when the shape or meaning of HistoryResult changes, so cached histories are rebuilt
+// (cheaply: transactions and JSON stay cached) instead of being served with stale verdicts.
+const HISTORY_VERSION = 2;
+
+type CachedHistory = { version?: number; newestSig: string; signatures: SigInfo[]; result: HistoryResult };
 
 const STATE_KINDS = /^(CreateMetadataAccount|UpdateMetadataAccount|Update)/;
 
@@ -74,7 +81,8 @@ const EMPTY_STATE: ChainState = {
 
 // The last finished history for a mint, without touching the RPC.
 export async function readCachedHistory(mint: string, cache: Cache): Promise<HistoryResult | null> {
-  return (await cache.get<CachedHistory>("history", mint))?.result ?? null;
+  const cached = await cache.get<CachedHistory>("history", mint);
+  return cached?.version === HISTORY_VERSION ? cached.result : null;
 }
 
 export async function buildHistory(mint: string, deps: Deps): Promise<HistoryResult> {
@@ -84,7 +92,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   // 1. Signatures, reusing the cached list when nothing new has happened.
   const cached = await cache.get<CachedHistory>("history", mint);
   const head = await rpc.call<SigInfo[]>("getSignaturesForAddress", [pda, { limit: 1 }]);
-  if (cached && head[0]?.signature === cached.newestSig) return cached.result;
+  if (cached && cached.version === HISTORY_VERSION && head[0]?.signature === cached.newestSig) return cached.result;
   const fresh = await fetchSignatures(rpc, pda, cached?.newestSig);
   const signatures = [...fresh, ...(cached?.signatures ?? [])];
 
@@ -200,6 +208,10 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     }
   }
 
+  // Being exalted changed the background art, so that alone isn't a swap.
+  const exalt = result.verdict === "Traits/art changed" ? exaltedVerdict(steps, result.changes) : null;
+  const finalVerdict: Verdict = exalt?.exalted ? "Exalted" : result.verdict;
+
   warnings.push(...result.warnings);
   if (burned) warnings.push("metadata account does not exist: the Panda is burned or closed");
   if (account && (account.collection?.key !== DTP_COLLECTION_MINT || !account.collection.verified)) {
@@ -216,7 +228,8 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     mint,
     metadataPda: pda,
     burned,
-    verdict: result.verdict,
+    verdict: finalVerdict,
+    exaltedAt: exalt?.exaltedAt ?? null,
     verdictChanges: result.changes,
     imageCheck,
     changedInHistory,
@@ -241,7 +254,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   // An incomplete history may fill in later (a pruned tx comes back), so don't pin it.
   const newestSig = signatures[0]?.signature;
   if (newestSig && unavailable.length === 0) {
-    await cache.set("history", mint, { newestSig, signatures, result: history } satisfies CachedHistory);
+    await cache.set("history", mint, { version: HISTORY_VERSION, newestSig, signatures, result: history } satisfies CachedHistory);
   }
   return history;
 }

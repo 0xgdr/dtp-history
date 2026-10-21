@@ -2,6 +2,7 @@
 // traits.ts is tiny and dependency-free, so the page reuses the server's trait matching.
 import { TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
+import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
 import type { HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
@@ -95,6 +96,7 @@ function renderHistory(r: HistoryResult): Node[] {
 const STAMP: Record<HistoryResult["verdict"], { text: string; cls: string }> = {
   Original: { text: "Original", cls: "ok" },
   "Traits/art changed": { text: "Swapped", cls: "bad" },
+  Exalted: { text: "Exalted", cls: "exalted" },
   Unknown: { text: "Unchecked", cls: "unknown" },
 };
 
@@ -103,11 +105,18 @@ function renderHero(r: HistoryResult): HTMLElement {
   const mintDate = longDate(r.steps[0]?.blockTime ?? null);
   const changed = r.verdictChanges.map((c) => (c.field === "image" ? "the art" : titleCase(c.field)));
 
-  const headline =
-    r.verdict === "Original" ? "Untouched since mint" : r.verdict === "Traits/art changed" ? "Swapped since mint" : "Can't tell yet";
+  const headline = {
+    Original: "Untouched since mint",
+    "Traits/art changed": "Swapped since mint",
+    Exalted: "Exalted since mint",
+    Unknown: "Can't tell yet",
+  }[r.verdict];
+  const exaltedOn = longDate(r.exaltedAt);
   const detail =
     r.verdict === "Original"
       ? `The art and all six traits match the mint${mintDate ? ` on ${mintDate}` : ""}.`
+      : r.verdict === "Exalted"
+        ? `The background changed when it was exalted${exaltedOn ? ` on ${exaltedOn}` : ""}. All six traits match the mint.`
       : r.verdict === "Traits/art changed"
         ? `${capitalise(listJoin(changed))} ${changed.length === 1 ? "differs" : "differ"} from the mint${mintDate ? ` on ${mintDate}` : ""}.`
         : sentence(r.warnings[0] ?? "Part of the history couldn't be fetched.");
@@ -156,9 +165,10 @@ function renderTraits(r: HistoryResult): HTMLElement {
   const same = () => h("span", { class: "same", title: "Same as at mint" }, "✓");
 
   const imageChange = changed.get("image");
+  const exaltArt = r.verdict === "Exalted";
   const imageStatus =
     imageChange && r.current.image
-      ? h("span", {}, "now ", safeLink(r.current.image, "different"))
+      ? h("span", {}, exaltArt ? "changed when exalted, " : "now ", safeLink(r.current.image, exaltArt ? "see it" : "different"))
       : r.imageCheck === "unknown"
         ? "not compared"
         : same();
@@ -170,21 +180,18 @@ function renderTraits(r: HistoryResult): HTMLElement {
       const c = changed.get(t);
       return row(titleCase(t), mint.get(t) ?? "none", c ? `now ${c.to ?? "missing"}` : same(), Boolean(c));
     }),
-    row("Art", r.original.image ? safeLink(r.original.image, "original image") : "none", imageStatus, Boolean(imageChange)),
+    row("Art", r.original.image ? safeLink(r.original.image, "original image") : "none", imageStatus, Boolean(imageChange) && !exaltArt),
     exaltedRow(r, mint.get(EXALTED) ?? null),
   );
 }
 
-// Some Pandas carry an exalted attribute (EXALTED_STAT), part of DTP's history and usually
-// added after mint. It's shown alongside the traits but doesn't affect the verdict.
-const EXALTED = "EXALTED_STAT";
-
+// The exalted attribute (see src/exalted.ts) is shown alongside the traits.
 function exaltedRow(r: HistoryResult, atMint: string | null): Node | string {
   const now = readTraits(r.steps.at(-1)?.json ?? null).values.get(EXALTED) ?? null;
   if (atMint === null && now === null) return "";
   // Early on, an exalted attribute was its own trait ("TELL_ME_A_JOKE": "Mint Date") before it
   // moved into EXALTED_STAT, so "added" is the first step with either form.
-  const names = exaltedNames(r);
+  const names = exaltedNames(r.steps.map((s) => s.json));
   const has = (s: Step) => [...readTraits(s.json).values.keys()].some((k) => k === EXALTED || names.has(k));
   const changedAt =
     atMint === null ? r.steps.find(has) : r.steps.findLast((s) => s.diff.some((c) => c.path === `attributes.${EXALTED}`));
@@ -206,18 +213,6 @@ function exaltedRow(r: HistoryResult, atMint: string | null): Node | string {
   );
 }
 
-// Stat names seen in EXALTED_STAT values ("TELL_ME_A_JOKE: Mint Date" -> TELL_ME_A_JOKE), so the
-// older one-trait form can be recognised in the history.
-function exaltedNames(r: HistoryResult): Set<string> {
-  const names = new Set<string>();
-  for (const step of r.steps) {
-    const value = readTraits(step.json).values.get(EXALTED);
-    const name = value?.split(":")[0]?.trim().toUpperCase();
-    if (name) names.add(name);
-  }
-  return names;
-}
-
 // "TELL_ME_A_JOKE: Mint Date" -> "Tell me a joke: Mint Date"
 function prettyExalted(value: string): string {
   const [stat = "", ...rest] = value.split(":");
@@ -236,7 +231,7 @@ function renderCompare(r: HistoryResult): HTMLElement {
 
 function renderTimeline(r: HistoryResult): HTMLElement {
   const swapSteps = r.steps.filter(hasSwap).length;
-  const names = exaltedNames(r);
+  const names = exaltedNames(r.steps.map((s) => s.json));
   const list = h("ol", { class: "timeline" }, ...r.steps.map((step) => renderStep(step, names)));
   const empty = h("p", { class: "empty" }, "No update ever touched the art or the six traits.");
 
@@ -275,9 +270,17 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
   const swaps = step.diff.filter((c) => c.tag === "swap");
   const cosmetic = step.diff.filter((c) => c.tag === "cosmetic");
   const artChanged = swaps.some((c) => c.path === "image");
-  const others = listJoin(unique(cosmeticPhrases(cosmetic, exalted)).filter((p) => !(artChanged && p === "art re-hosted")));
+  // Being exalted changed the background art: say so, in gold rather than red.
+  const exaltArt = artChanged && swaps.length === 1 && addsExalted(step.diff, exalted);
+  const others = listJoin(
+    unique(cosmeticPhrases(cosmetic, exalted)).filter(
+      (p) => !(artChanged && p === "art re-hosted") && !(exaltArt && p === "exalted attribute added"),
+    ),
+  );
   const summary =
-    swaps.length > 0
+    exaltArt
+      ? `Exalted; the background changed with it${others ? `; also ${others}` : ""}`
+      : swaps.length > 0
       ? `Changed ${listJoin(swaps.map(swapName))}${others ? `; also ${others}` : ""}`
       : step.index === 0
         ? "Starting art and traits"
@@ -285,7 +288,7 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
 
   return h(
     "li",
-    { class: `step${swaps.length ? " has-swap" : ""}` },
+    { class: `step${swaps.length ? " has-swap" : ""}${exaltArt ? " has-exalt" : ""}` },
     h(
       "details",
       {},

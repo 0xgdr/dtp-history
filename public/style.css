@@ -13,6 +13,7 @@
   --bin-ink: #eef4ef;
   --band: #070707; /* the logo's own black, so the icon blends into the header */
   --sticker: #f2c230;
+  --gold: #8a6100; /* exalted */
   --sticker-ink: #1d1a0a;
   --ok: #17663f;
   --bad: #b8261f;
@@ -37,6 +38,7 @@
     --bad: #ff7a6b;
     --unknown: #a7b3ac;
     --link: #8cc8f2;
+    --gold: #f2c230;
   }
 }
 
@@ -331,6 +333,10 @@ main {
   --stamp: var(--unknown);
 }
 
+.exalted {
+  --stamp: var(--gold);
+}
+
 @keyframes stamp {
   from {
     opacity: 0;
@@ -561,6 +567,16 @@ figcaption {
 .step.has-swap .step-summary {
   color: var(--bad);
   font-weight: 700;
+}
+
+.step.has-exalt .step-summary {
+  color: var(--gold);
+}
+
+.step.has-exalt .chip.swap {
+  color: var(--sticker-ink);
+  background: var(--sticker);
+  border-color: var(--sticker);
 }
 
 .step-body {
