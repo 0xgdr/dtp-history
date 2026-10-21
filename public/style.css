@@ -169,7 +169,7 @@ main {
   line-height: 1.05;
 }
 
-/* Loading: the raccoon rummages while the history is rebuilt. */
+/* Loading: a pulse travels along a row of blocks while the history is rebuilt. */
 
 .dig {
   display: grid;
@@ -179,30 +179,31 @@ main {
   text-align: center;
 }
 
-.dig-logo {
-  width: 112px;
-  height: 112px;
-  margin-bottom: 8px;
-  transform-origin: 50% 90%;
-  animation: rummage 1.6s ease-in-out infinite;
+.signal {
+  margin-bottom: 28px;
+  overflow: visible;
 }
 
-@keyframes rummage {
+.signal line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.signal rect {
+  fill: var(--line);
+  animation: pulse 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.12s);
+}
+
+/* A pulse runs left to right: each block briefly lights up in sticker yellow. */
+@keyframes pulse {
   0%,
+  40%,
   100% {
-    transform: rotate(0) translateY(0);
+    fill: var(--line);
   }
-  20% {
-    transform: rotate(-7deg) translateY(2px);
-  }
-  40% {
-    transform: rotate(5deg) translateY(-6px);
-  }
-  60% {
-    transform: rotate(-3deg) translateY(1px);
-  }
-  80% {
-    transform: rotate(4deg) translateY(-3px);
+  15% {
+    fill: var(--sticker);
   }
 }
 
@@ -230,8 +231,8 @@ main {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dig-logo {
-    animation: none;
+  .signal rect {
+    animation-duration: 4s;
   }
 }
 
