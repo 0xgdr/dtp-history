@@ -97,6 +97,7 @@ main {
 
 .search {
   flex: 1 1 340px;
+  min-width: 0;
   max-width: 520px;
 }
 
@@ -145,6 +146,25 @@ main {
   border: 0;
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+.search .dice {
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+  color: var(--bin-ink);
+  background: #12291f;
+  border: 1px solid #27493b;
+}
+
+.search .dice:hover {
+  color: var(--sticker);
+  border-color: var(--sticker);
+}
+
+.search .dice:active svg {
+  transform: rotate(90deg);
+  transition: transform 120ms;
 }
 
 .search button:active {
@@ -736,6 +756,16 @@ pre {
 }
 
 /* Phones */
+
+@media (max-width: 380px) {
+  .search button {
+    padding-inline: 14px;
+  }
+
+  .search .dice {
+    padding-inline: 10px;
+  }
+}
 
 @media (max-width: 720px) {
   .hero {

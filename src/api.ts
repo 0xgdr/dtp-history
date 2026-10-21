@@ -10,6 +10,8 @@ type ApiDeps = Deps & {
 
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
+  let numbers: number[] | undefined;
+
   // Concurrent requests for the same mint share one build.
   const inflight = new Map<string, Promise<HistoryResult>>();
   const history = (mint: string): Promise<HistoryResult> => {
@@ -75,6 +77,15 @@ export function createApi(deps: ApiDeps) {
       const input = parseInput(safeDecode(raw));
       if (input.type !== "mint") return error(400, "bad_input", "not a base58 mint address");
       return respond(input.mint, null);
+    },
+
+    // A random Panda number from the index, so the page never lands on a missing number.
+    random(pick: () => number = Math.random): Response {
+      if (!deps.index) return error(503, "no_index", "the Panda index has not been built (bun run index)");
+      numbers ??= Object.keys(deps.index.pandas).map(Number);
+      const n = numbers[Math.floor(pick() * numbers.length)];
+      if (n === undefined) return error(404, "not_found", "the index is empty");
+      return Response.json({ number: n }, { headers: { "cache-control": "no-store" } });
     },
   };
 }

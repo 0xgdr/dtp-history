@@ -45,6 +45,7 @@ const server = Bun.serve({
     "/healthz": new Response("ok"),
     "/api/panda/:n": { GET: (req) => api.panda(req.params.n) },
     "/api/mint/:mint": { GET: (req) => api.mint(req.params.mint) },
+    "/api/random": { GET: () => api.random() },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
   development: !production && { hmr: true, console: true },
