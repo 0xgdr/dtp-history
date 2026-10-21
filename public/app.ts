@@ -63,16 +63,46 @@ const DIG_STEPS = [
   "Still digging. Some Pandas have a lot of history",
 ];
 
+// A row of blocks joined by a thin line, with a pulse travelling along it: the history being read
+// off the chain, block by block.
+function signal(): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const count = 9;
+  const size = 10;
+  const gap = 16;
+  const width = count * size + (count - 1) * gap;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "signal");
+  svg.setAttribute("viewBox", `0 0 ${width} ${size}`);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS(NS, "line");
+  line.setAttribute("x1", "0");
+  line.setAttribute("x2", String(width));
+  line.setAttribute("y1", String(size / 2));
+  line.setAttribute("y2", String(size / 2));
+  svg.append(line);
+  for (let i = 0; i < count; i++) {
+    const block = document.createElementNS(NS, "rect");
+    block.setAttribute("x", String(i * (size + gap)));
+    block.setAttribute("width", String(size));
+    block.setAttribute("height", String(size));
+    block.setAttribute("rx", "2");
+    block.style.setProperty("--i", String(i));
+    svg.append(block);
+  }
+  return svg;
+}
+
 function renderLoading(q: string): HTMLElement {
   const trimmed = q.trim().replace(/^#\s*/, "");
   const label = /^\d+$/.test(trimmed) ? `#${Number(trimmed)}` : shortenAddresses(trimmed);
-  // Reuse the header's bundled logo rather than a second copy.
-  const logoSrc = document.querySelector<HTMLImageElement>(".logo")?.src ?? "";
   const status = h("p", { class: "dig-status", role: "status" }, `${DIG_STEPS[0]}…`);
   const box = h(
     "section",
     { class: "dig" },
-    logoSrc ? h("img", { class: "dig-logo", src: logoSrc, alt: "", width: "112", height: "112" }) : "",
+    signal(),
     h("p", { class: "dig-number" }, label),
     status,
     h("p", { class: "dig-note" }, "The first look can take up to a minute."),
