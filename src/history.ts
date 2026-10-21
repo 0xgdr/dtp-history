@@ -13,7 +13,16 @@ import { flattenTransaction, type RawTransaction } from "./tx.ts";
 import { displayUrl, normalizeUri } from "./uri.ts";
 import { compareImages, verdict, type ImageCheck, type Verdict, type VerdictChange } from "./verdict.ts";
 
-export type Deps = { rpc: Rpc; fetcher: Fetcher; cache: Cache; now?: () => Date };
+// How far a build has got, for the page to show on long lookups.
+export type BuildProgress = { phase: "signatures" | "transactions" | "metadata"; done: number; total: number | null };
+
+export type Deps = {
+  rpc: Rpc;
+  fetcher: Fetcher;
+  cache: Cache;
+  now?: () => Date;
+  onProgress?: (progress: BuildProgress) => void;
+};
 
 export type SigInfo = { signature: string; slot: number; blockTime: number | null; err: unknown };
 
@@ -93,16 +102,22 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   const cached = await cache.get<CachedHistory>("history", mint);
   const head = await rpc.call<SigInfo[]>("getSignaturesForAddress", [pda, { limit: 1 }]);
   if (cached && cached.version === HISTORY_VERSION && head[0]?.signature === cached.newestSig) return cached.result;
-  const fresh = await fetchSignatures(rpc, pda, cached?.newestSig);
+  const report = deps.onProgress ?? (() => {});
+  const fresh = await fetchSignatures(rpc, pda, cached?.newestSig, (n) =>
+    report({ phase: "signatures", done: n, total: null }),
+  );
   const signatures = [...fresh, ...(cached?.signatures ?? [])];
 
   // 2. Transactions, oldest first. Failed txs never changed anything.
   const ordered = signatures.filter((s) => s.err == null).reverse();
   const unavailable: string[] = [];
+  let fetched = 0;
+  report({ phase: "transactions", done: 0, total: ordered.length });
   const txs = await Promise.all(
     ordered.map(async (s) => {
       const tx = await getTransaction(rpc, cache, s.signature);
       if (!tx) unavailable.push(s.signature);
+      report({ phase: "transactions", done: ++fetched, total: ordered.length });
       return tx;
     }),
   );
@@ -158,7 +173,14 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   // 6. JSON for each distinct URI, then image checks.
   const uris = [...new Set(folded.map((f) => f.state.uri).filter((u): u is string => u !== null))];
   const jsonByKey = new Map<string, { json: Json | null; error: string | null }>();
-  await Promise.all(uris.map(async (uri) => jsonByKey.set(normalizeUri(uri).key, await fetcher.json(uri))));
+  let jsonDone = 0;
+  report({ phase: "metadata", done: 0, total: uris.length });
+  await Promise.all(
+    uris.map(async (uri) => {
+      jsonByKey.set(normalizeUri(uri).key, await fetcher.json(uri));
+      report({ phase: "metadata", done: ++jsonDone, total: uris.length });
+    }),
+  );
 
   const steps: Step[] = [];
   for (const [i, { event, state: s }] of folded.entries()) {
@@ -260,13 +282,19 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
 }
 
 // Pages newest to oldest until a short page, or until `stopAt` (the newest cached signature).
-async function fetchSignatures(rpc: Rpc, pda: string, stopAt?: string): Promise<SigInfo[]> {
+async function fetchSignatures(
+  rpc: Rpc,
+  pda: string,
+  stopAt: string | undefined,
+  onPage: (count: number) => void,
+): Promise<SigInfo[]> {
   const out: SigInfo[] = [];
   for (let before: string | undefined; ; ) {
     const page = await rpc.call<SigInfo[]>("getSignaturesForAddress", [pda, { limit: 1000, before }]);
     const stop = stopAt ? page.findIndex((s) => s.signature === stopAt) : -1;
     if (stop >= 0) return [...out, ...page.slice(0, stop)];
     out.push(...page);
+    onPage(out.length);
     if (page.length < 1000) return out;
     before = page.at(-1)?.signature;
   }

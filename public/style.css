@@ -250,6 +250,21 @@ main {
   color: var(--muted);
 }
 
+/* Real progress: blocks fill left to right; the next one pulses. */
+
+.signal.progress rect {
+  animation: none;
+  fill: var(--line);
+}
+
+.signal.progress rect.lit {
+  fill: var(--sticker);
+}
+
+.signal.progress rect.next {
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
 /* Problems: the same layout, with the signal broken. */
 
 .signal.broken rect {

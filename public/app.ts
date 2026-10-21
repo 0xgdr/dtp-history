@@ -7,6 +7,8 @@ import type { HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
+// A 202 from the API: the history is still being built.
+type Building = { status: "building"; phase: "signatures" | "transactions" | "metadata"; done: number; total: number | null };
 
 const form = document.querySelector<HTMLFormElement>("#lookup")!;
 const input = document.querySelector<HTMLInputElement>("#q")!;
@@ -36,12 +38,25 @@ async function load(q: string): Promise<void> {
   inflight?.abort();
   const controller = new AbortController();
   inflight = controller;
-  result.replaceChildren(renderLoading(q));
+  const view = loadingView(q);
+  result.replaceChildren(view.el);
   try {
-    const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
-    const body = (await res.json()) as HistoryResult | ApiError;
-    if (controller.signal.aborted) return;
-    result.replaceChildren(...("error" in body ? [renderProblem(q, problemFor(res.status, body, q))] : renderHistory(body)));
+    // Long histories answer 202 with progress; keep asking until the result is ready.
+    for (;;) {
+      const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
+      const body = (await res.json()) as HistoryResult | ApiError | Building;
+      if (controller.signal.aborted) return;
+      if (res.status === 202 && "status" in body && body.status === "building") {
+        view.show(body);
+        await new Promise((r) => setTimeout(r, 2000));
+        if (controller.signal.aborted) return;
+        continue;
+      }
+      result.replaceChildren(
+        ...("error" in body ? [renderProblem(q, problemFor(res.status, body, q))] : renderHistory(body as HistoryResult)),
+      );
+      return;
+    }
   } catch {
     if (controller.signal.aborted) return;
     result.replaceChildren(renderProblem(q, problemFor(0, null, q)));
@@ -50,8 +65,8 @@ async function load(q: string): Promise<void> {
 
 // --- Rendering ---
 
-// What the server does for a lookup, shown in turn while it works. The server answers in one go,
-// so these describe the work rather than track progress.
+// What the server does for a lookup, shown in turn while it works. Once the server reports real
+// progress (long histories), the counts replace these.
 const DIG_STEPS = [
   "Lifting the dumpster lid",
   "Digging through every metadata update",
@@ -110,24 +125,42 @@ function lookupLabel(q: string): string {
   return /^\d+$/.test(trimmed) ? `#${Number(trimmed)}` : shortenAddresses(trimmed);
 }
 
-function renderLoading(q: string): HTMLElement {
+function loadingView(q: string): { el: HTMLElement; show: (p: Building) => void } {
   const label = lookupLabel(q);
+  const bar = signal();
   const status = h("p", { class: "dig-status", role: "status" }, `${DIG_STEPS[0]}…`);
-  const box = h(
-    "section",
-    { class: "dig" },
-    signal(),
-    h("p", { class: "dig-number" }, label),
-    status,
-    h("p", { class: "dig-note" }, "The first look can take up to a minute."),
-  );
+  const note = h("p", { class: "dig-note" }, "The first look can take up to a minute.");
+  const box = h("section", { class: "dig" }, bar, h("p", { class: "dig-number" }, label), status, note);
   let i = 0;
   const timer = setInterval(() => {
     if (!box.isConnected) return clearInterval(timer);
     i = Math.min(i + 1, DIG_STEPS.length - 1);
     status.textContent = `${DIG_STEPS[i]}…`;
   }, 2800);
-  return box;
+
+  // Real progress: counts in the status line, and the blocks fill up as transactions are read.
+  const show = (p: Building) => {
+    clearInterval(timer);
+    const n = (x: number) => x.toLocaleString("en-GB");
+    status.textContent =
+      p.phase === "signatures"
+        ? `Listing transactions: ${n(p.done)} so far…`
+        : p.phase === "transactions"
+          ? `Reading transactions: ${n(p.done)} of ${n(p.total ?? 0)}…`
+          : `Fetching metadata files: ${n(p.done)} of ${n(p.total ?? 0)}…`;
+    if (p.phase !== "metadata" && (p.total ?? p.done) > 500) {
+      note.textContent = "This Panda has a long history, so this one takes a few minutes. You can leave this tab open.";
+    }
+    const blocks = [...bar.querySelectorAll("rect")];
+    const fraction = p.phase === "metadata" ? 1 : p.phase === "transactions" && p.total ? p.done / p.total : 0;
+    const lit = Math.min(blocks.length, Math.floor(fraction * blocks.length));
+    bar.classList.add("progress");
+    blocks.forEach((b, k) => {
+      b.classList.toggle("lit", k < lit);
+      b.classList.toggle("next", k === lit);
+    });
+  };
+  return { el: box, show };
 }
 
 function renderWelcome(): HTMLElement {

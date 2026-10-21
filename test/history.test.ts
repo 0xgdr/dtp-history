@@ -240,4 +240,44 @@ describe("API", () => {
     const none = createApi({ rpc: (await fixtureRpc()).rpc, fetcher: await fixtureFetcher(), cache: memoryCache(), index: null });
     expect(none.random().status).toBe(503);
   });
+
+  test("a slow build answers 202 with progress, then the result", async () => {
+    const { rpc } = await fixtureRpc();
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    // Hold every getTransaction until released, so the build sits in the transactions phase.
+    const slow: Rpc = {
+      call: async (method, params) => {
+        if (method === "getTransaction") await gate;
+        return rpc.call(method, params);
+      },
+    };
+    const a = createApi({ rpc: slow, fetcher: await fixtureFetcher(), cache: memoryCache(), index, firstWaitMs: 30, pollWaitMs: 10 });
+
+    const first = await a.mint(MINT_6872);
+    expect(first.status).toBe(202);
+    expect(await first.json()).toEqual({ status: "building", phase: "transactions", done: 0, total: 55 });
+
+    release();
+    let done: Response | undefined;
+    for (let i = 0; i < 50 && !done; i++) {
+      const res = await a.mint(MINT_6872);
+      if (res.status === 200) done = res;
+    }
+    expect(done?.status).toBe(200);
+    expect(((await done!.json()) as { verdict: string }).verdict).toBe("Original");
+  });
+
+  test("a background build that fails is reported to the next poll, once", async () => {
+    const failing: Rpc = {
+      call: async () => {
+        await Bun.sleep(20);
+        throw new RpcError("getSignaturesForAddress failed (status 429) via https://rpc.example/<redacted>");
+      },
+    };
+    const a = createApi({ rpc: failing, fetcher: await fixtureFetcher(), cache: memoryCache(), index, firstWaitMs: 5, pollWaitMs: 5 });
+    expect((await a.mint(MINT_6872)).status).toBe(202);
+    await Bun.sleep(40);
+    expect((await a.mint(MINT_6872)).status).toBe(502);
+  });
 });
