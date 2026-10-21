@@ -1,45 +1,28 @@
-/* Trash Panda Check. The world is the bin: dumpster-green band, galvanized-steel paper,
-   a sticker-yellow button, and one ink stamp for the verdict. */
+/* Trash Panda Check. The world is the bin: a black band in the logo's own black, dumpster-green
+   page, a sticker-yellow button, and one ink stamp for the verdict. Dark only, to match the brand. */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --paper: #e6eae4; /* galvanized steel */
-  --card: #f3f5f1;
-  --ink: #17201b;
-  --muted: #56645c;
-  --line: #c3cbc4;
-  --bin: #1f4d3a; /* dumpster green */
-  --bin-ink: #eef4ef;
+  --paper: #0f241b; /* inside the dumpster */
+  --card: #163126;
+  --ink: #e3ece6;
+  --muted: #9cb0a4;
+  --line: #2a4a3b;
+  --bin: #0a1a13;
+  --bin-ink: #e3ece6;
   --band: #070707; /* the logo's own black, so the icon blends into the header */
   --sticker: #f2c230;
-  --gold: #8a6100; /* exalted */
   --sticker-ink: #1d1a0a;
-  --ok: #17663f;
-  --bad: #b8261f;
-  --unknown: #5d6862;
-  --link: #1d5c86;
+  --gold: #f2c230; /* exalted */
+  --ok: #6fd39b;
+  --bad: #ff7a6b;
+  --unknown: #a7b3ac;
+  --link: #8cc8f2;
 
   --font: "Archivo", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --radius: 6px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0f241b; /* inside the dumpster */
-    --card: #163126;
-    --ink: #e3ece6;
-    --muted: #9cb0a4;
-    --line: #2a4a3b;
-    --bin: #0a1a13;
-    --bin-ink: #e3ece6;
-    --ok: #6fd39b;
-    --bad: #ff7a6b;
-    --unknown: #a7b3ac;
-    --link: #8cc8f2;
-    --gold: #f2c230;
-  }
 }
 
 * {
@@ -136,7 +119,7 @@ main {
   padding: 10px 12px;
   font: inherit;
   color: var(--bin-ink);
-  background: #161616; /* charcoal on the black band, same in light and dark mode */
+  background: #161616; /* charcoal on the black band */
   border: 1px solid #333;
   border-radius: var(--radius);
 }

@@ -43,7 +43,7 @@ async function load(q: string): Promise<void> {
       "div",
       { class: "notice loading" },
       h("span", { class: "spinner", "aria-hidden": "true" }),
-      h("p", {}, "Digging through this Panda's dumpster. The first look can take up to a minute; after that it's instant."),
+      h("p", {}, "Digging through this Panda's dumpster. The first look can take up to a minute. After that it's instant."),
     ),
   );
   try {
@@ -262,8 +262,8 @@ function renderTimeline(r: HistoryResult): HTMLElement {
 
 function historySummary(updates: number, swaps: number): string {
   if (updates <= 0) return "No updates since mint.";
-  const touched = swaps === 0 ? "none touched" : swaps === updates ? "all touched" : `${swaps} touched`;
-  return `${updates} ${updates === 1 ? "update" : "updates"} since mint; ${touched} the art or traits.`;
+  const which = swaps === 0 ? "none" : swaps === updates ? "all" : `${swaps}`;
+  return `${updates} ${updates === 1 ? "update" : "updates"} since mint, ${which} of which touched the art or traits.`;
 }
 
 function renderStep(step: Step, exalted: Set<string>): HTMLElement {
@@ -279,9 +279,9 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
   );
   const summary =
     exaltArt
-      ? `Exalted; the background changed with it${others ? `; also ${others}` : ""}`
+      ? `Exalted, which changed the background${others ? `, plus ${others}` : ""}`
       : swaps.length > 0
-      ? `Changed ${listJoin(swaps.map(swapName))}${others ? `; also ${others}` : ""}`
+      ? `Changed ${listJoin(swaps.map(swapName))}${others ? `, plus ${others}` : ""}`
       : step.index === 0
         ? "Starting art and traits"
         : capitalise(others) || "No visible change";
