@@ -133,10 +133,18 @@ main {
   min-width: 0;
   padding: 10px 12px;
   font: inherit;
-  color: var(--ink);
-  background: var(--card);
-  border: 2px solid transparent;
+  color: var(--bin-ink);
+  background: #161616; /* charcoal on the black band, same in light and dark mode */
+  border: 1px solid #333;
   border-radius: var(--radius);
+}
+
+.search input::placeholder {
+  color: #8a8a8a;
+}
+
+.search input:hover {
+  border-color: #4a4a4a;
 }
 
 .search input::-webkit-search-cancel-button {
