@@ -4,7 +4,8 @@ import { imageOf, readTraits, type Json } from "./traits.ts";
 import { normalizeUri } from "./uri.ts";
 
 export type ImageCheck = "same" | "rehosted" | "different" | "unknown";
-export type Verdict = "Original" | "Traits/art changed" | "Unknown";
+// "Exalted" is set by history.ts (see exalted.ts); verdict() itself returns the other three.
+export type Verdict = "Original" | "Traits/art changed" | "Exalted" | "Unknown";
 export type VerdictChange = { field: string; from: string | null; to: string | null };
 
 // Same canonical key: same art. Different keys: compare SHA-256 of the bytes.
