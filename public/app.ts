@@ -126,7 +126,7 @@ function renderWelcome(): HTMLElement {
       {},
       "Enter a Degen Trash Panda number to compare its art & six traits today with the day it was minted.",
     ),
-    h("p", {}, "Try ", lookupLink("15700", "#15700"), "."),
+    h("p", {}, "Try ", lookupLink("15700", "#15700"), " or ", randomLink(), "."),
   );
 }
 
@@ -482,6 +482,30 @@ function solscan(kind: "tx" | "token", id: string): HTMLElement {
   return h("a", { href: `https://solscan.io/${kind}/${id}`, target: "_blank", rel: "noopener noreferrer", title: id }, short(id));
 }
 
+// Ask the server for a random Panda number from the index, then look it up.
+async function lookupRandom(): Promise<void> {
+  try {
+    const res = await fetch("/api/random");
+    const body = (await res.json()) as { number?: number; detail?: string };
+    if (!res.ok || body.number === undefined) throw new Error(body.detail ?? `HTTP ${res.status}`);
+    input.value = String(body.number);
+    form.requestSubmit();
+  } catch (err) {
+    result.replaceChildren(
+      h("div", { class: "notice error" }, h("p", {}, `Couldn't pick a random Panda: ${err instanceof Error ? err.message : err}.`)),
+    );
+  }
+}
+
+function randomLink(): HTMLElement {
+  const a = h("a", { href: "#", role: "button" }, "a random Panda");
+  a.addEventListener("click", (event) => {
+    event.preventDefault();
+    lookupRandom();
+  });
+  return a;
+}
+
 function lookupLink(q: string, text: string): HTMLElement {
   const a = h("a", { href: `?n=${encodeURIComponent(q)}` }, text);
   a.addEventListener("click", (event) => {
@@ -581,6 +605,8 @@ function full(v: unknown): string {
   if (v === null || v === undefined) return "none";
   return typeof v === "string" ? v : JSON.stringify(v);
 }
+
+document.querySelector("#random")?.addEventListener("click", lookupRandom);
 
 // Start last, so every constant above is defined before the first render.
 window.addEventListener("popstate", loadFromUrl);

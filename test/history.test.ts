@@ -231,4 +231,13 @@ describe("API", () => {
     await Bun.sleep(10);
     expect(calls.length).toBe(coldCalls + 1); // one getSignaturesForAddress(limit 1) from the single revalidate
   });
+
+  test("GET /api/random picks a number from the index", async () => {
+    const a = await api();
+    const res = a.random(() => 0.5);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ number: 6872 }); // #7 is a duplicate, so 6872 is the only entry
+    const none = createApi({ rpc: (await fixtureRpc()).rpc, fetcher: await fixtureFetcher(), cache: memoryCache(), index: null });
+    expect(none.random().status).toBe(503);
+  });
 });
