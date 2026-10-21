@@ -53,6 +53,11 @@ The first uncached history takes a while: about a minute on the public RPC (it r
 `getTransaction` hard), a few seconds with Helius. After that, a Panda is served from the cache
 at once and re-checked against chain in the background, at most once a minute.
 
+## Known data gaps
+
+Some history can't be fully recovered, e.g. metadata moved to GenesysGo Shadow Drive in January
+2023 that now returns 404. See `docs/data-gaps.md`.
+
 ## Deploy
 
 Railway: see `ops/railway.md`.
