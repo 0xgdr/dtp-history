@@ -11,6 +11,7 @@
   --line: #c3cbc4;
   --bin: #1f4d3a; /* dumpster green */
   --bin-ink: #eef4ef;
+  --band: #070707; /* the logo's own black, so the icon blends into the header */
   --sticker: #f2c230;
   --sticker-ink: #1d1a0a;
   --ok: #17663f;
@@ -69,7 +70,7 @@ a {
 /* Header band */
 
 .band {
-  background: var(--bin);
+  background: var(--band);
   color: var(--bin-ink);
 }
 
