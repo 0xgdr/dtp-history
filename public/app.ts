@@ -24,8 +24,6 @@ form.addEventListener("submit", (event) => {
   load(q);
 });
 
-window.addEventListener("popstate", loadFromUrl);
-loadFromUrl();
 
 function loadFromUrl(): void {
   const q = new URLSearchParams(location.search).get("n")?.trim() ?? "";
@@ -38,14 +36,7 @@ async function load(q: string): Promise<void> {
   inflight?.abort();
   const controller = new AbortController();
   inflight = controller;
-  result.replaceChildren(
-    h(
-      "div",
-      { class: "notice loading" },
-      h("span", { class: "spinner", "aria-hidden": "true" }),
-      h("p", {}, "Digging through this Panda's dumpster. The first look can take up to a minute. After that it's instant."),
-    ),
-  );
+  result.replaceChildren(renderLoading(q));
   try {
     const res = await fetch(`/api/panda/${encodeURIComponent(q)}`, { signal: controller.signal });
     const body = (await res.json()) as HistoryResult | ApiError;
@@ -60,6 +51,40 @@ async function load(q: string): Promise<void> {
 }
 
 // --- Rendering ---
+
+// What the server does for a lookup, shown in turn while it works. The server answers in one go,
+// so these describe the work rather than track progress.
+const DIG_STEPS = [
+  "Lifting the dumpster lid",
+  "Digging through every metadata update",
+  "Fetching the mint-day metadata",
+  "Comparing the six traits",
+  "Checking the art",
+  "Still digging. Some Pandas have a lot of history",
+];
+
+function renderLoading(q: string): HTMLElement {
+  const trimmed = q.trim().replace(/^#\s*/, "");
+  const label = /^\d+$/.test(trimmed) ? `#${Number(trimmed)}` : shortenAddresses(trimmed);
+  // Reuse the header's bundled logo rather than a second copy.
+  const logoSrc = document.querySelector<HTMLImageElement>(".logo")?.src ?? "";
+  const status = h("p", { class: "dig-status", role: "status" }, `${DIG_STEPS[0]}…`);
+  const box = h(
+    "section",
+    { class: "dig" },
+    logoSrc ? h("img", { class: "dig-logo", src: logoSrc, alt: "", width: "112", height: "112" }) : "",
+    h("p", { class: "dig-number" }, label),
+    status,
+    h("p", { class: "dig-note" }, "The first look can take up to a minute."),
+  );
+  let i = 0;
+  const timer = setInterval(() => {
+    if (!box.isConnected) return clearInterval(timer);
+    i = Math.min(i + 1, DIG_STEPS.length - 1);
+    status.textContent = `${DIG_STEPS[i]}…`;
+  }, 2800);
+  return box;
+}
 
 function renderWelcome(): HTMLElement {
   return h(
@@ -526,3 +551,7 @@ function full(v: unknown): string {
   if (v === null || v === undefined) return "none";
   return typeof v === "string" ? v : JSON.stringify(v);
 }
+
+// Start last, so every constant above is defined before the first render.
+window.addEventListener("popstate", loadFromUrl);
+loadFromUrl();

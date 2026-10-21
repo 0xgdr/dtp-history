@@ -11,7 +11,7 @@
   --line: #2a4a3b;
   --bin: #0a1a13;
   --bin-ink: #e3ece6;
-  --band: #070707; /* the logo's own black, so the icon blends into the header */
+  --band: #0a1a13; /* green-black: a soft step into the page green (the header logo is transparent) */
   --sticker: #f2c230;
   --sticker-ink: #1d1a0a;
   --gold: #f2c230; /* exalted */
@@ -119,17 +119,17 @@ main {
   padding: 10px 12px;
   font: inherit;
   color: var(--bin-ink);
-  background: #161616; /* charcoal on the black band */
-  border: 1px solid #333;
+  background: #12291f; /* a step lighter than the green-black band */
+  border: 1px solid #27493b;
   border-radius: var(--radius);
 }
 
 .search input::placeholder {
-  color: #8a8a8a;
+  color: #7d948a;
 }
 
 .search input:hover {
-  border-color: #4a4a4a;
+  border-color: #3a6352;
 }
 
 .search input::-webkit-search-cancel-button {
@@ -167,6 +167,72 @@ main {
   font-weight: 900;
   font-variation-settings: "wdth" 112;
   line-height: 1.05;
+}
+
+/* Loading: the raccoon rummages while the history is rebuilt. */
+
+.dig {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 56px 16px 24px;
+  text-align: center;
+}
+
+.dig-logo {
+  width: 112px;
+  height: 112px;
+  margin-bottom: 8px;
+  transform-origin: 50% 90%;
+  animation: rummage 1.6s ease-in-out infinite;
+}
+
+@keyframes rummage {
+  0%,
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+  20% {
+    transform: rotate(-7deg) translateY(2px);
+  }
+  40% {
+    transform: rotate(5deg) translateY(-6px);
+  }
+  60% {
+    transform: rotate(-3deg) translateY(1px);
+  }
+  80% {
+    transform: rotate(4deg) translateY(-3px);
+  }
+}
+
+.dig-number {
+  margin: 0;
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 125;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--line);
+  overflow-wrap: anywhere;
+}
+
+.dig-status {
+  margin: 16px 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-height: 1.5em;
+}
+
+.dig-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dig-logo {
+    animation: none;
+  }
 }
 
 .notice {
