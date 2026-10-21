@@ -33,6 +33,10 @@ export type Step = {
   jsonError: string | null;
   image: string | null;
   diff: Change[];
+  // When metadata before this step couldn't be fetched (e.g. a host that's gone), this step's JSON
+  // diff is against the last readable metadata, from this time. The change happened somewhere in
+  // between, and the exact update can't be known.
+  gapSince: number | null;
   state: ChainState;
 };
 
@@ -61,7 +65,7 @@ export type HistoryResult = {
 
 // Bump when the shape or meaning of HistoryResult changes, so cached histories are rebuilt
 // (cheaply: transactions and JSON stay cached) instead of being served with stale verdicts.
-const HISTORY_VERSION = 2;
+const HISTORY_VERSION = 3;
 
 type CachedHistory = { version?: number; newestSig: string; signatures: SigInfo[]; result: HistoryResult };
 
@@ -161,15 +165,20 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   await Promise.all(uris.map(async (uri) => jsonByKey.set(normalizeUri(uri).key, await fetcher.json(uri))));
 
   const steps: Step[] = [];
+  // The last step whose metadata could be fetched. JSON diffs compare against it, so a change made
+  // while the metadata was unreadable still shows up, at the first readable step after the gap.
+  let lastReadable: Step | null = null;
   for (const [i, { event, state: s }] of folded.entries()) {
     const uriKey = s.uri === null ? null : normalizeUri(s.uri).key;
     const fetched = uriKey ? jsonByKey.get(uriKey) : undefined;
     const json = fetched?.json ?? null;
     const prev = steps.at(-1);
     let diff = diffChain(prev?.state ?? null, s);
-    if (prev && prev.uriKey !== uriKey) {
-      const imageCheck = await compareImages(fetcher, imageOf(prev.json), imageOf(json));
-      diff = [...diff, ...diffJson(prev.json, json, imageCheck)];
+    let gapSince: number | null = null;
+    if (json && lastReadable && lastReadable.uriKey !== uriKey) {
+      const imageCheck = await compareImages(fetcher, imageOf(lastReadable.json), imageOf(json));
+      diff = [...diff, ...diffJson(lastReadable.json, json, imageCheck)];
+      if (prev && prev !== lastReadable) gapSince = lastReadable.blockTime;
     }
     const image = imageOf(json);
     steps.push({
@@ -188,8 +197,10 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
       jsonError: s.uri === null ? "no URI" : (fetched?.error ?? null),
       image: image ? displayUrl(normalizeUri(image).key) : null,
       diff,
+      gapSince,
       state: s,
     });
+    if (json) lastReadable = steps.at(-1)!;
   }
 
   // 7. Verdict: mint-time JSON vs current JSON only.
