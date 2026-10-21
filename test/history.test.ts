@@ -162,6 +162,40 @@ describe("#6872 full pipeline", () => {
   });
 });
 
+describe("metadata that can no longer be fetched", () => {
+  test("a change made during the gap shows at the first readable step after it", async () => {
+    const base = await fixtureFetcher();
+    const gone = new Set(["ar:dEdDE4RR-nq_MqxJ-c_DOlkHDFwCvP0GmVWlJpVWdrU", "ar:HK4b1FL5AdkncwPpN8D0KWUmqsxyVxAITb78t95xLrQ"]);
+    const fetcher: Fetcher = {
+      ...base,
+      async json(uri) {
+        const key = normalizeUri(uri).key;
+        if (gone.has(key)) return { json: null, error: "HTTP 404 from shdw-drive.genesysgo.net" };
+        const result = await base.json(uri);
+        // Today's metadata has a different HEAD than at mint.
+        if (key === "ar:TUfvuT7r8St-HoH9yJ8876AEi0r3a6gh4R6_NT-Yw3k" && result.json) {
+          const attrs = result.json.attributes as { trait_type: string; value: unknown }[];
+          result.json.attributes = attrs.map((a) => (a.trait_type === "HEAD" ? { ...a, value: "Gold Crown" } : a));
+        }
+        return result;
+      },
+    };
+    const { rpc } = await fixtureRpc();
+    const result = await buildHistory(MINT_6872, { rpc, fetcher, cache: memoryCache() });
+
+    expect(result.verdict).toBe("Traits/art changed");
+    const after = result.steps.find((s) => s.dateUtc === "2026-10-12")!;
+    expect(after.diff).toContainEqual({ path: "attributes.HEAD", from: "Headband", to: "Gold Crown", tag: "swap" });
+    // The last readable metadata was at mint (both 2021-11-23 steps share the mint URI).
+    expect(new Date(after.gapSince! * 1000).toISOString().slice(0, 10)).toBe("2021-11-23");
+    // Steps inside the gap have no JSON diff, and readable neighbours have no gap.
+    const inGap = result.steps.filter((s) => s.jsonError);
+    expect(inGap.length).toBeGreaterThan(0);
+    expect(inGap.every((s) => s.diff.every((c) => !c.path.startsWith("attributes.")))).toBe(true);
+    expect(result.steps[1]!.gapSince).toBeNull();
+  });
+});
+
 describe("API", () => {
   const index = buildIndex(
     [

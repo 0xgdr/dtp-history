@@ -714,6 +714,12 @@ figcaption {
   font-size: 0.9em;
 }
 
+.gap-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
 .error-inline {
   color: var(--bad);
 }

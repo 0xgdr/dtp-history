@@ -332,14 +332,24 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
       (p) => !(artChanged && p === "art re-hosted") && !(exaltArt && p === "exalted attribute added"),
     ),
   );
+  // A change found across a gap of unreadable metadata happened somewhere in that span.
+  const span = step.gapSince !== null ? `, sometime between ${shortDate(step.gapSince)} and ${shortDate(step.blockTime)}` : "";
   const summary =
     exaltArt
-      ? `Exalted, which changed the background${others ? `, plus ${others}` : ""}`
+      ? `Exalted, which changed the background${span}${others ? `, plus ${others}` : ""}`
       : swaps.length > 0
-      ? `Changed ${listJoin(swaps.map(swapName))}${others ? `, plus ${others}` : ""}`
+      ? `Changed ${listJoin(swaps.map(swapName))}${span}${others ? `, plus ${others}` : ""}`
       : step.index === 0
         ? "Starting art and traits"
-        : capitalise(others) || "No visible change";
+        : `${capitalise(others) || "No visible change"}${step.jsonError ? " (file no longer online)" : ""}`;
+  const gapNote =
+    step.gapSince !== null
+      ? h(
+          "p",
+          { class: "gap-note" },
+          `The metadata between ${shortDate(step.gapSince)} and ${shortDate(step.blockTime)} is no longer online, so the exact update can't be known. The changes above compare the last readable metadata with this one.`,
+        )
+      : "";
 
   return h(
     "li",
@@ -375,7 +385,8 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
             h("dt", {}, "Metadata"),
             h("dd", {}, step.uri ? safeLink(step.uri, hostOf(step.uri)) : "none"),
           ),
-          step.jsonError ? h("p", { class: "error-inline" }, `Metadata file unavailable: ${step.jsonError}`) : "",
+          gapNote,
+          step.jsonError ? h("p", { class: "error-inline" }, `Metadata file no longer online (${step.jsonError}).`) : "",
           step.json ? h("details", { class: "json" }, h("summary", {}, "Metadata file"), h("pre", {}, JSON.stringify(step.json, null, 2))) : "",
         ),
       ),
