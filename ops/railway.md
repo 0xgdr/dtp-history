@@ -19,17 +19,6 @@ In Cloudflare: **R2 → Manage API tokens → Create API token**, *Object Read &
 the bucket. An existing bucket is fine: entries go under `CACHE_PREFIX` (default
 `dtp-history/cache/`).
 
-### Copying an old volume cache into R2
-
-A service that used a volume at `/data` can copy that cache across before the volume is removed.
-With the Railway CLI linked to the project:
-
-```
-railway ssh -- bun scripts/copy-cache-to-r2.ts /data/cache
-```
-
-It skips entries already in the bucket, so it can be run again if interrupted.
-
 ## 3. Variables
 
 | Variable | Value |

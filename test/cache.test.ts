@@ -1,10 +1,8 @@
 import { S3Client } from "bun";
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
-import { copyDirToBucket } from "../scripts/copy-cache-to-r2.ts";
-import { fileCache, s3Cache } from "../src/cache.ts";
+import { s3Cache } from "../src/cache.ts";
 
-// A minimal S3 stand-in: PUT stores the body, GET/HEAD return it or S3's NoSuchKey error.
+// A minimal S3 stand-in: PUT stores the body, GET returns it or S3's NoSuchKey error.
 const objects = new Map<string, string>();
 let failing = false;
 const server = Bun.serve({
@@ -17,7 +15,6 @@ const server = Bun.serve({
       return new Response(null, { status: 200, headers: { etag: '"x"' } });
     }
     const body = objects.get(path);
-    if (req.method === "HEAD") return new Response(null, { status: body === undefined ? 404 : 200 });
     if (body !== undefined) return new Response(body, { headers: { "content-type": "application/json" } });
     return new Response(
       `<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>missing</Message></Error>`,
@@ -50,31 +47,5 @@ test("s3Cache never throws when the bucket is down", async () => {
     await cache.set("history", "mint", { ok: true });
   } finally {
     failing = false;
-  }
-});
-
-test("copyDirToBucket copies a file cache so s3Cache reads the same entries, skipping ones already there", async () => {
-  const dir = `${import.meta.dir}/../.cache/copy-test-${process.pid}`;
-  await rm(dir, { recursive: true, force: true });
-  await mkdir(dir, { recursive: true });
-  try {
-    const local = fileCache(dir);
-    const longUrl = `https://arweave.net/${"x".repeat(200)}`;
-    await local.set("tx", "sigA", { slot: 2 });
-    await local.set("json", longUrl, { name: "Panda" });
-    await local.set("history", "mintB", { version: 3 });
-    await Bun.write(`${dir}/tx/sigB.json.123.456.tmp`, "half-written");
-
-    const remote = s3Cache(client, "copy/");
-    await remote.set("history", "mintB", { version: 3 });
-    const lines: string[] = [];
-    expect(await copyDirToBucket(dir, client, "copy/", (l) => lines.push(l))).toEqual({ copied: 2, skipped: 1, failed: 0 });
-
-    expect(await remote.get("tx", "sigA")).toEqual({ slot: 2 });
-    expect(await remote.get("json", longUrl)).toEqual({ name: "Panda" });
-    expect(await remote.get("tx", "sigB")).toBeNull();
-    expect(lines).toEqual([]);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
   }
 });
