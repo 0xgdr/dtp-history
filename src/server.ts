@@ -1,8 +1,8 @@
-// Starts the app in src/app.ts. Vercel's Bun runtime ships the files in src/ but didn't ship the
+// Starts the app in src/site.ts. Vercel's Bun runtime ships the files in src/ but didn't ship the
 // packages they import (requests failed with "Cannot find package '@solana/kit'"), so on Vercel the
-// server runs from src/app.gen.js instead: the same app with its packages bundled in, written by
+// server runs from src/site.gen.js instead: the same app with its packages bundled in, written by
 // `bun run build` (scripts/build-server.ts).
-const { options } = Bun.env.VERCEL ? await import("./app.gen.js") : await import("./app.ts");
+const { options } = Bun.env.VERCEL ? await import("./site.gen.js") : await import("./site.ts");
 
 const server = Bun.serve(options);
 
