@@ -9,6 +9,12 @@ request to it as a Vercel Function. `vercel.json` picks Bun 1.4 and sets the bui
   with its script, styles and images, plus `og.png`, into `src/page.gen.js`. The server imports
   that module, so the page is deployed with the code. Vercel's Bun runtime doesn't support Bun's
   HTML imports in `routes`, which is what `bun run dev` uses.
+- **Server bundle:** the build then bundles `src/site.ts` (the app) with every package it imports
+  into `src/site.gen.js`, and on Vercel `src/server.ts` runs that instead of `src/site.ts`. Vercel's
+  Bun runtime ships `src/` but didn't ship `node_modules`, so requests failed with
+  `Cannot find package '@solana/kit'`. Elsewhere `src/server.ts` runs `src/site.ts` directly.
+  Don't name a file `app` or `index` in the root or `src/`: Vercel picks its entrypoint from
+  `app`, `index` or `server` there, and chose `src/app.ts` over `src/server.ts`.
 - **Panda index:** `data/panda-index.json` is imported by the server, so it ships the same way.
 - **Cache:** R2, as on Railway (`S3_BUCKET` and friends). Nothing is written to Vercel's disk.
 - **Background work:** a history that takes longer than 15 s is answered with "still building"
