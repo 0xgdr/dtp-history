@@ -1,5 +1,6 @@
 import index from "../public/index.html";
-import { fileCache } from "./cache.ts";
+import { S3Client } from "bun";
+import { fileCache, s3Cache } from "./cache.ts";
 import { loadConfig } from "./config.ts";
 import { createApi } from "./api.ts";
 import { loadIndex } from "./index-lookup.ts";
@@ -8,7 +9,11 @@ import { createRpc } from "./rpc.ts";
 import { siteOrigin, withShareTags } from "./share.ts";
 
 const config = loadConfig();
-const cache = fileCache(config.cacheDir);
+// S3Client reads S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_ENDPOINT from the environment.
+const cache = config.cacheBucket
+  ? s3Cache(new S3Client({ bucket: config.cacheBucket }), config.cachePrefix)
+  : fileCache(config.cacheDir);
+console.log(config.cacheBucket ? `Cache: bucket ${config.cacheBucket}/${config.cachePrefix}` : `Cache: ${config.cacheDir}`);
 const pandaIndex = await loadIndex(`${import.meta.dir}/../data/panda-index.json`);
 if (!pandaIndex) console.warn("data/panda-index.json not found: number lookups are off until `bun run index`");
 
