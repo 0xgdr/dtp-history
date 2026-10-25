@@ -1,3 +1,4 @@
+import type { S3Client } from "bun";
 import { mkdir, rename } from "node:fs/promises";
 
 export type Namespace = "tx" | "json" | "imghash" | "history";
@@ -29,6 +30,37 @@ export function fileCache(dir: string): Cache {
       await rename(tmp, path);
     },
   };
+}
+
+type Bucket = Pick<S3Client, "file">;
+
+// One JSON object per entry at `<prefix><namespace>/<key>.json` in an S3-compatible bucket
+// (Cloudflare R2 in production), so the cache outlives deploys without a volume. A failed read
+// counts as a miss and a failed write is only logged: the cache saves RPC calls, it is never
+// needed for a correct answer.
+export function s3Cache(bucket: Bucket, prefix = ""): Cache {
+  const keyFor = (ns: Namespace, key: string) => `${prefix}${ns}/${safeKey(key)}.json`;
+  return {
+    async get<T>(ns: Namespace, key: string): Promise<T | null> {
+      try {
+        return (await bucket.file(keyFor(ns, key)).json()) as T;
+      } catch (err) {
+        if ((err as { code?: string }).code !== "NoSuchKey") console.warn(`cache read ${ns}/${key}: ${errMessage(err)}`);
+        return null;
+      }
+    },
+    async set(ns, key, value) {
+      try {
+        await bucket.file(keyFor(ns, key)).write(JSON.stringify(value), { type: "application/json" });
+      } catch (err) {
+        console.warn(`cache write ${ns}/${key}: ${errMessage(err)}`);
+      }
+    },
+  };
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 export function memoryCache(): Cache {

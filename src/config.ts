@@ -5,6 +5,9 @@ export type Config = {
   rpcRps: number;
   rpcConcurrency: number;
   cacheDir: string;
+  // Set: the cache lives in this S3/R2 bucket (credentials from S3_* variables) and cacheDir is unused.
+  cacheBucket: string | null;
+  cachePrefix: string;
   port: number;
   publicUrl: string | null;
 };
@@ -16,6 +19,9 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     rpcRps: positiveNumber(env.RPC_RPS, 8),
     rpcConcurrency: positiveNumber(env.RPC_CONCURRENCY, 4),
     cacheDir: env.CACHE_DIR?.trim() || ".cache",
+    cacheBucket: env.S3_BUCKET?.trim() || null,
+    // Keeps the cache apart from anything else in a shared bucket.
+    cachePrefix: env.CACHE_PREFIX?.trim() ?? "dtp-history/cache/",
     port: positiveNumber(env.PORT, 3000),
     // Site origin for share-card URLs. Unset: taken from each request's host.
     publicUrl: env.PUBLIC_URL?.trim().replace(/\/+$/, "") || null,
