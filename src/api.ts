@@ -121,8 +121,9 @@ export function createApi(deps: ApiDeps) {
       }
       return Response.json(number !== null ? { ...result, number } : result);
     } catch (err) {
-      if (err instanceof RpcError) return error(502, "rpc_failed", "the Solana RPC failed after retries");
       console.error("history failed:", err instanceof Error ? err.message : err);
+      // RpcError messages carry the RPC's host only (redactUrl), never its key.
+      if (err instanceof RpcError) return error(502, "rpc_failed", "the Solana RPC failed after retries");
       return error(500, "internal", "failed to build the history");
     }
   }
