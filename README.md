@@ -4,8 +4,6 @@ Read-only history and verdict tool for Degenerate Trash Pandas (Solana NFTs). En
 number and it rebuilds that Panda's metadata history from chain and says whether its image or
 traits have changed since mint. No wallets, no signing, no write calls.
 
-Spec: `specs/dtp/2026-10-20-panda-history-app.md` in `0xgdr/grokbot-hub`.
-
 ## Setup
 
 ```sh
