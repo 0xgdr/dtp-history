@@ -63,7 +63,7 @@ Some history can't be fully recovered, e.g. metadata moved to GenesysGo Shadow D
 
 ## Deploy
 
-Vercel: see `ops/vercel.md`. Railway (being retired): see `ops/railway.md`.
+Vercel: see `ops/vercel.md`, which also covers other hosts.
 
 ## Fixtures
 

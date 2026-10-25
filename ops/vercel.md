@@ -16,7 +16,7 @@ request to it as a Vercel Function. `vercel.json` picks Bun 1.4 and sets the bui
   Don't name a file `app` or `index` in the root or `src/`: Vercel picks its entrypoint from
   `app`, `index` or `server` there, and chose `src/app.ts` over `src/server.ts`.
 - **Panda index:** `data/panda-index.json` is imported by the server, so it ships the same way.
-- **Cache:** R2, as on Railway (`S3_BUCKET` and friends). Nothing is written to Vercel's disk.
+- **Cache:** R2 (`S3_BUCKET` and friends). Nothing is written to Vercel's disk.
 - **Background work:** a history that takes longer than 15 s is answered with "still building"
   (202) and keeps building, and cached Pandas are re-checked after they're served. On Vercel the
   server hands that work to `waitUntil` (from `@vercel/functions`), so it isn't cut off when the
@@ -59,7 +59,8 @@ request to it as a Vercel Function. `vercel.json` picks Bun 1.4 and sets the bui
 Project → Settings → Domains → Add. Share-card URLs come from the request's host; set
 `PUBLIC_URL` only if they show the wrong address.
 
-## Retiring Railway
+## Other hosts
 
-Once the Vercel deploy works: delete the Railway service and its volume, then delete
-`railway.json` and `ops/railway.md` from the repo.
+Any host that runs a long-lived `bun run start` with the variables above works, with no disk
+needed (Fly.io, Render, Cloud Run, a VPS). There `src/server.ts` runs `src/site.ts` directly and
+builds the page at startup, so no build step is needed.
