@@ -50,9 +50,11 @@ if (production) {
   }
   pageHtml = async () => page.html;
 } else {
-  const index = (await import("../web/index.html")).default;
+  // The path is only known at runtime, so a host's bundler (Vercel's) can't follow it into the
+  // HTML file and fail to parse it as JavaScript. Only Bun's dev server ever loads it.
+  const index = (await import(`${import.meta.dir}/../web/index.html`)).default as Response;
   const og = Bun.file(`${import.meta.dir}/../web/og.png`);
-  pageRoutes = { "/_page": index as unknown as Response, "/og.png": () => new Response(og) };
+  pageRoutes = { "/_page": index, "/og.png": () => new Response(og) };
   pageHtml = async () => (await fetch(new URL("/_page", server.url))).text();
 }
 
