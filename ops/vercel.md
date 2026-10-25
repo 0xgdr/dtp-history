@@ -15,10 +15,13 @@ request to it as a Vercel Function. `vercel.json` picks Bun 1.4 and sets the bui
   (202) and keeps building, and cached Pandas are re-checked after they're served. On Vercel the
   server hands that work to `waitUntil` (from `@vercel/functions`), so it isn't cut off when the
   response is sent.
-- **More than one instance:** Vercel may run several copies of the server. Each has its own list
-  of builds in progress and its own RPC rate limit. A progress poll that lands on another copy
-  starts its own build: more Helius calls and a progress bar that jumps, but the same answer. At
-  this site's traffic Vercel usually reuses one instance.
+- **More than one instance:** Vercel may run several copies of the server. While a new history
+  is building, the copy doing it keeps a small "building" marker in R2 with its progress,
+  rewritten every 5 s. A progress poll that lands on another copy reports that progress instead
+  of starting a second build. If the building copy stops (crashed or frozen), the marker goes
+  stale after 20 s and the next poll starts the build again; a failed build marks itself stale
+  at once. Each copy still has its own RPC rate limit, so together they can exceed `RPC_RPS`;
+  the RPC client backs off on 429s, so that slows lookups rather than failing them.
 
 ## First deploy
 

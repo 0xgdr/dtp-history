@@ -13,9 +13,20 @@ type ApiDeps = Deps & {
   // Keeps a build running after the response that started it has been sent. Serverless hosts
   // (Vercel's waitUntil) may otherwise freeze or stop it; on a normal server it isn't needed.
   background?: (work: Promise<unknown>) => void;
+  // See BuildMarker. Defaults: rewritten every 5 s, abandoned after 20 s without a rewrite.
+  heartbeatMs?: number;
+  markerStaleMs?: number;
 };
 
 const FAILURE_TTL_MS = 60_000;
+
+// Written to the cache (R2 in production, shared by every copy of this server) while a new
+// history is being built. A host like Vercel can run several copies, and a progress poll may land
+// on one that isn't running the build: it reports the marker's progress instead of starting a
+// second build. The copy building rewrites the marker every heartbeatMs; if it stops (crashed or
+// frozen), the marker goes stale and the next poll starts the build again.
+type BuildMarker = { at: number; progress: BuildProgress | null };
+type Building = { building: BuildProgress | null };
 
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
@@ -26,15 +37,40 @@ export function createApi(deps: ApiDeps) {
   const inflight = new Map<string, Promise<HistoryResult>>();
   const progress = new Map<string, BuildProgress>();
   const failures = new Map<string, { err: unknown; at: number }>();
-  const history = (mint: string): Promise<HistoryResult> => {
+  const heartbeatMs = deps.heartbeatMs ?? 5_000;
+  const markerStaleMs = deps.markerStaleMs ?? 20_000;
+
+  // Only new histories get a marker: a revalidate runs while the cached history is being served,
+  // so no poll waits on it.
+  const startMarker = (mint: string) => {
+    const write = (at: number) =>
+      deps.cache
+        .set("building", mint, { at, progress: progress.get(mint) ?? null } satisfies BuildMarker)
+        .catch(() => {});
+    void write(Date.now());
+    const timer = setInterval(() => void write(Date.now()), heartbeatMs);
+    return {
+      done: () => clearInterval(timer),
+      // A failed build leaves a stale marker, so a poll on another copy retries straight away.
+      failed: () => {
+        clearInterval(timer);
+        void write(0);
+      },
+    };
+  };
+
+  const history = (mint: string, isNew = false): Promise<HistoryResult> => {
     let p = inflight.get(mint);
     if (!p) {
+      const marker = isNew ? startMarker(mint) : null;
       p = buildHistory(mint, { ...deps, onProgress: (pr) => progress.set(mint, pr) })
         .catch((err) => {
           failures.set(mint, { err, at: Date.now() });
+          marker?.failed();
           throw err;
         })
         .finally(() => {
+          marker?.done();
           inflight.delete(mint);
           progress.delete(mint);
         });
@@ -49,7 +85,7 @@ export function createApi(deps: ApiDeps) {
   // `revalidateMs` a background build picks up any new signatures for the next request.
   const revalidateMs = deps.revalidateMs ?? 60_000;
   const lastChecked = new Map<string, number>();
-  const cachedOrBuild = async (mint: string): Promise<HistoryResult | "building"> => {
+  const cachedOrBuild = async (mint: string): Promise<HistoryResult | Building> => {
     const cached = await readCachedHistory(mint, deps.cache);
     if (!cached) {
       const failed = failures.get(mint);
@@ -57,8 +93,13 @@ export function createApi(deps: ApiDeps) {
         failures.delete(mint);
         if (Date.now() - failed.at < FAILURE_TTL_MS) throw failed.err;
       }
+      if (!inflight.has(mint)) {
+        const marker = await deps.cache.get<BuildMarker>("building", mint);
+        if (marker && Date.now() - marker.at < markerStaleMs) return { building: marker.progress };
+      }
       const wait = inflight.has(mint) ? (deps.pollWaitMs ?? 1500) : (deps.firstWaitMs ?? 15_000);
-      return Promise.race([history(mint), Bun.sleep(wait).then(() => "building" as const)]);
+      const building = Bun.sleep(wait).then((): Building => ({ building: progress.get(mint) ?? null }));
+      return Promise.race([history(mint, true), building]);
     }
     const now = Date.now();
     if (now - (lastChecked.get(mint) ?? 0) >= revalidateMs) {
@@ -71,10 +112,10 @@ export function createApi(deps: ApiDeps) {
   async function respond(mint: string, number: number | null): Promise<Response> {
     try {
       const result = await cachedOrBuild(mint);
-      if (result === "building") {
+      if ("building" in result) {
         // Long history: answer now with how far the build has got; the page polls again.
         return Response.json(
-          { status: "building", ...(progress.get(mint) ?? { phase: "signatures", done: 0, total: null }) },
+          { status: "building", ...(result.building ?? { phase: "signatures", done: 0, total: null }) },
           { status: 202, headers: { "cache-control": "no-store", "retry-after": "2" } },
         );
       }
