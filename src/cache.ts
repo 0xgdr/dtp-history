@@ -1,7 +1,7 @@
 import type { S3Client } from "bun";
 import { mkdir, rename } from "node:fs/promises";
 
-export type Namespace = "tx" | "json" | "imghash" | "history";
+export type Namespace = "tx" | "json" | "imghash" | "history" | "building";
 
 export type Cache = {
   get<T>(ns: Namespace, key: string): Promise<T | null>;

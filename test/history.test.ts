@@ -266,6 +266,81 @@ describe("API", () => {
     expect(calls.length).toBe(coldCalls + 1); // one getSignaturesForAddress(limit 1) from the single revalidate
   });
 
+  test("every new build is handed to background, so a serverless host keeps it running", async () => {
+    const handed: Promise<unknown>[] = [];
+    const cache = memoryCache();
+    const deps = { fetcher: await fixtureFetcher(), cache, index, background: (w: Promise<unknown>) => handed.push(w) };
+
+    // Cold: the build that answers the request.
+    const a = createApi({ ...deps, rpc: (await fixtureRpc()).rpc });
+    expect((await a.mint(MINT_6872)).status).toBe(200);
+    expect(handed).toHaveLength(1);
+
+    // Warm: the cached answer is returned and the revalidate runs after it.
+    const b = createApi({ ...deps, rpc: (await fixtureRpc()).rpc, revalidateMs: 0 });
+    expect((await b.mint(MINT_6872)).status).toBe(200);
+    expect(handed).toHaveLength(2);
+    await Promise.all(handed); // settles even if a build fails, so waitUntil never sees a rejection
+  });
+
+  // Two createApi instances sharing one cache stand in for two copies of the server on Vercel.
+  async function gatedRpc() {
+    const { rpc, calls } = await fixtureRpc();
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const slow: Rpc = { call: async (m, p) => (await gate, rpc.call(m, p)) };
+    return { rpc: slow, calls, release };
+  }
+
+  test("a poll on another copy reports the build in progress instead of starting a second build", async () => {
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+    const owner = await gatedRpc();
+    const a = createApi({ rpc: owner.rpc, fetcher, cache, index, firstWaitMs: 10, pollWaitMs: 10 });
+    expect((await a.mint(MINT_6872)).status).toBe(202);
+
+    const other = await fixtureRpc();
+    const b = createApi({ rpc: other.rpc, fetcher, cache, index, revalidateMs: Infinity });
+    const poll = await b.mint(MINT_6872);
+    expect(poll.status).toBe(202);
+    expect(await poll.json()).toMatchObject({ status: "building" });
+
+    owner.release();
+    while ((await a.mint(MINT_6872)).status === 202) await Bun.sleep(5);
+    expect((await b.mint(MINT_6872)).status).toBe(200); // the owner's result, from the cache
+    expect(other.calls).toHaveLength(0);
+  });
+
+  test("a marker that stopped being rewritten is abandoned, and the next poll builds", async () => {
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+    const owner = await gatedRpc(); // never released: this copy is "frozen"
+    const a = createApi({ rpc: owner.rpc, fetcher, cache, index, firstWaitMs: 10, heartbeatMs: 60_000, markerStaleMs: 30 });
+    expect((await a.mint(MINT_6872)).status).toBe(202);
+
+    await Bun.sleep(50);
+    const other = await fixtureRpc();
+    const b = createApi({ rpc: other.rpc, fetcher, cache, index, markerStaleMs: 30 });
+    expect((await b.mint(MINT_6872)).status).toBe(200);
+    expect(other.calls.length).toBeGreaterThan(0);
+  });
+
+  test("a failed build leaves no marker in the way: another copy retries at once", async () => {
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+    const failing: Rpc = {
+      call: async () => {
+        throw new RpcError("getSignaturesForAddress failed (status 429)");
+      },
+    };
+    const a = createApi({ rpc: failing, fetcher, cache, index });
+    expect((await a.mint(MINT_6872)).status).toBe(502);
+    await Bun.sleep(5); // the stale marker is written as the failure settles
+
+    const b = createApi({ rpc: (await fixtureRpc()).rpc, fetcher, cache, index });
+    expect((await b.mint(MINT_6872)).status).toBe(200);
+  });
+
   test("GET /api/random picks a number from the index", async () => {
     const a = await api();
     const res = a.random(() => 0.5);

@@ -1,7 +1,8 @@
 # dependencies
 node_modules/
 
-# output
+# output (src/page.gen.js is written by `bun run build`)
+src/page.gen.js
 out/
 dist/
 *.tgz
