@@ -8,7 +8,8 @@ test("RPC_URL wins, public RPC is the fallback", () => {
 });
 
 test("S3_BUCKET switches the cache to a bucket, under a prefix by default", () => {
-  expect(loadConfig({})).toMatchObject({ cacheBucket: null, cachePrefix: "dtp-history/cache/" });
+  expect(loadConfig({})).toMatchObject({ cacheBucket: null, cachePrefix: "dtp-history/cache/", copyCacheFrom: null });
+  expect(loadConfig({ COPY_CACHE_FROM: " /data/cache " }).copyCacheFrom).toBe("/data/cache");
   expect(loadConfig({ S3_BUCKET: "stuff", CACHE_PREFIX: "" })).toMatchObject({ cacheBucket: "stuff", cachePrefix: "" });
 });
 

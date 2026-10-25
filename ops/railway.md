@@ -21,14 +21,16 @@ the bucket. An existing bucket is fine: entries go under `CACHE_PREFIX` (default
 
 ### Copying an old volume cache into R2
 
-A service that used a volume at `/data` can copy that cache across before the volume is removed.
-With the Railway CLI linked to the project:
+A service that used a volume at `/data` can copy that cache across before the volume is removed:
 
-```
-railway ssh -- bun scripts/copy-cache-to-r2.ts /data/cache
-```
+1. Add the variable `COPY_CACHE_FROM` = `/data/cache` and let it redeploy.
+2. The logs show `Cache copy: …` progress, then `Cache copy done: N copied, …`. The site keeps
+   serving while it runs.
+3. Remove `COPY_CACHE_FROM`, then the volume.
 
-It skips entries already in the bucket, so it can be run again if interrupted.
+Entries already in the bucket are skipped, so a restart part-way through just carries on. With
+the Railway CLI the same copy can be run by hand:
+`railway ssh -- bun scripts/copy-cache-to-r2.ts /data/cache`.
 
 ## 3. Variables
 

@@ -1,8 +1,7 @@
 import { S3Client } from "bun";
 import { afterAll, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
-import { copyDirToBucket } from "../scripts/copy-cache-to-r2.ts";
-import { fileCache, s3Cache } from "../src/cache.ts";
+import { copyDirToBucket, fileCache, s3Cache } from "../src/cache.ts";
 
 // A minimal S3 stand-in: PUT stores the body, GET/HEAD return it or S3's NoSuchKey error.
 const objects = new Map<string, string>();

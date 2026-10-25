@@ -1,6 +1,6 @@
 import index from "../public/index.html";
 import { S3Client } from "bun";
-import { fileCache, s3Cache } from "./cache.ts";
+import { copyDirToBucket, fileCache, s3Cache } from "./cache.ts";
 import { loadConfig } from "./config.ts";
 import { createApi } from "./api.ts";
 import { loadIndex } from "./index-lookup.ts";
@@ -10,9 +10,8 @@ import { siteOrigin, withShareTags } from "./share.ts";
 
 const config = loadConfig();
 // S3Client reads S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_ENDPOINT from the environment.
-const cache = config.cacheBucket
-  ? s3Cache(new S3Client({ bucket: config.cacheBucket }), config.cachePrefix)
-  : fileCache(config.cacheDir);
+const bucket = config.cacheBucket ? new S3Client({ bucket: config.cacheBucket }) : null;
+const cache = bucket ? s3Cache(bucket, config.cachePrefix) : fileCache(config.cacheDir);
 console.log(config.cacheBucket ? `Cache: bucket ${config.cacheBucket}/${config.cachePrefix}` : `Cache: ${config.cacheDir}`);
 const pandaIndex = await loadIndex(`${import.meta.dir}/../data/panda-index.json`);
 if (!pandaIndex) console.warn("data/panda-index.json not found: number lookups are off until `bun run index`");
@@ -57,6 +56,25 @@ const server = Bun.serve({
 });
 
 console.log(`Listening on ${server.url}`);
+
+// One-off move from a volume to R2 without a shell: set COPY_CACHE_FROM, deploy, wait for
+// "Cache copy done" in the logs, then remove it. Runs alongside requests and skips entries already
+// copied, so a restart part-way through just carries on.
+if (config.copyCacheFrom) {
+  const from = config.copyCacheFrom;
+  if (!bucket) {
+    console.warn("COPY_CACHE_FROM is set but S3_BUCKET is not: nothing to copy into");
+  } else {
+    console.log(`Cache copy: ${from} -> ${config.cacheBucket}/${config.cachePrefix}`);
+    copyDirToBucket(from, bucket, config.cachePrefix, (line) => console.log(`Cache copy: ${line}`))
+      .then((s) =>
+        console.log(
+          `Cache copy done: ${s.copied} copied, ${s.skipped} already there, ${s.failed} failed. Remove COPY_CACHE_FROM.`,
+        ),
+      )
+      .catch((err) => console.error(`Cache copy failed: ${err instanceof Error ? err.message : err}`));
+  }
+}
 
 // Railway sends SIGTERM when a new deploy replaces this one. Stop taking requests, let the ones
 // in flight finish (up to 10 s), then exit cleanly instead of being killed mid-request.

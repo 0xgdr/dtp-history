@@ -8,6 +8,8 @@ export type Config = {
   // Set: the cache lives in this S3/R2 bucket (credentials from S3_* variables) and cacheDir is unused.
   cacheBucket: string | null;
   cachePrefix: string;
+  // Set with cacheBucket: copy this file cache into the bucket in the background at startup.
+  copyCacheFrom: string | null;
   port: number;
   publicUrl: string | null;
 };
@@ -22,6 +24,7 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     cacheBucket: env.S3_BUCKET?.trim() || null,
     // Keeps the cache apart from anything else in a shared bucket.
     cachePrefix: env.CACHE_PREFIX?.trim() ?? "dtp-history/cache/",
+    copyCacheFrom: env.COPY_CACHE_FROM?.trim() || null,
     port: positiveNumber(env.PORT, 3000),
     // Site origin for share-card URLs. Unset: taken from each request's host.
     publicUrl: env.PUBLIC_URL?.trim().replace(/\/+$/, "") || null,
