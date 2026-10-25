@@ -10,6 +10,9 @@ type ApiDeps = Deps & {
   // The first request waits longer; follow-up polls answer quickly.
   firstWaitMs?: number;
   pollWaitMs?: number;
+  // Keeps a build running after the response that started it has been sent. Serverless hosts
+  // (Vercel's waitUntil) may otherwise freeze or stop it; on a normal server it isn't needed.
+  background?: (work: Promise<unknown>) => void;
 };
 
 const FAILURE_TTL_MS = 60_000;
@@ -35,7 +38,8 @@ export function createApi(deps: ApiDeps) {
           inflight.delete(mint);
           progress.delete(mint);
         });
-      p.catch(() => {}); // a poll may have stopped waiting; the failure is kept above
+      const settled = p.catch(() => {}); // a poll may have stopped waiting; the failure is kept above
+      deps.background?.(settled);
       inflight.set(mint, p);
     }
     return p;

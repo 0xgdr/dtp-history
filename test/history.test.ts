@@ -266,6 +266,23 @@ describe("API", () => {
     expect(calls.length).toBe(coldCalls + 1); // one getSignaturesForAddress(limit 1) from the single revalidate
   });
 
+  test("every new build is handed to background, so a serverless host keeps it running", async () => {
+    const handed: Promise<unknown>[] = [];
+    const cache = memoryCache();
+    const deps = { fetcher: await fixtureFetcher(), cache, index, background: (w: Promise<unknown>) => handed.push(w) };
+
+    // Cold: the build that answers the request.
+    const a = createApi({ ...deps, rpc: (await fixtureRpc()).rpc });
+    expect((await a.mint(MINT_6872)).status).toBe(200);
+    expect(handed).toHaveLength(1);
+
+    // Warm: the cached answer is returned and the revalidate runs after it.
+    const b = createApi({ ...deps, rpc: (await fixtureRpc()).rpc, revalidateMs: 0 });
+    expect((await b.mint(MINT_6872)).status).toBe(200);
+    expect(handed).toHaveLength(2);
+    await Promise.all(handed); // settles even if a build fails, so waitUntil never sees a rejection
+  });
+
   test("GET /api/random picks a number from the index", async () => {
     const a = await api();
     const res = a.random(() => 0.5);

@@ -50,11 +50,6 @@ export function resolve(index: PandaIndex, n: number): Resolution {
   return { kind: "unknown" };
 }
 
-export async function loadIndex(path: string): Promise<PandaIndex | null> {
-  const file = Bun.file(path);
-  return (await file.exists()) ? ((await file.json()) as PandaIndex) : null;
-}
-
 // --- Building the index from DAS `getAssetsByGroup` pages (see scripts/build-index.ts). ---
 
 export type DasAsset = {

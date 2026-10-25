@@ -25,17 +25,19 @@ cp .env.example .env   # then set RPC_URL
 ## Scripts
 
 ```sh
-bun run dev        # server with hot reload (Bun HTML imports bundle public/)
-bun run start      # production mode
+bun run dev        # server with hot reload (Bun HTML imports bundle web/)
+bun run start      # production mode (bundles the page first)
+bun run build      # bundle the page into src/page.gen.js (Vercel's build step)
 bun test           # offline unit tests on test/fixtures
 bun run typecheck
 bun run index      # rebuild data/panda-index.json (needs a DAS-capable RPC_URL, e.g. Helius)
 bun run fixtures   # re-record test/fixtures/6872 (needs RPC_URL)
 ```
 
-The page is a plain `public/index.html` imported by `src/server.ts` and passed to
-`Bun.serve({ routes })`. Bun bundles its `<script>` and `<link>` tags on request; no separate
-build step.
+The page is a plain `web/index.html`. In development `src/server.ts` imports it and passes it to
+`Bun.serve({ routes })`, and Bun bundles its `<script>` and `<link>` tags on request with hot
+reload. In production `scripts/build-page.ts` bundles it once into `src/page.gen.js`
+(gitignored), which the server imports, so the page ships with the code on any host.
 
 ## API
 
@@ -60,7 +62,7 @@ Some history can't be fully recovered, e.g. metadata moved to GenesysGo Shadow D
 
 ## Deploy
 
-Railway: see `ops/railway.md`.
+Vercel: see `ops/vercel.md`. Railway (being retired): see `ops/railway.md`.
 
 ## Fixtures
 
