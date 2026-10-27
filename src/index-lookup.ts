@@ -3,6 +3,7 @@ import { PANDA_NAME_RE } from "./constants.ts";
 export type PandaIndex = {
   generatedAt: string;
   collection: string;
+  creator: string;
   count: number;
   pandas: Record<string, string>;
   duplicates: Record<string, string[]>;
@@ -57,16 +58,23 @@ export type DasAsset = {
   burnt?: boolean;
   content?: { metadata?: { name?: string } };
   grouping?: { group_key: string; group_value: string }[];
+  creators?: { address: string; verified: boolean }[];
 };
 
-export function buildIndex(assets: DasAsset[], collection: string, generatedAt: string): PandaIndex {
+// An asset belongs if it is in the verified collection or carries the verified DTP creator.
+// Pass the pages of both `getAssetsByGroup` and `getAssetsByCreator`; overlap is deduplicated.
+export function buildIndex(assets: DasAsset[], collection: string, creator: string, generatedAt: string): PandaIndex {
   const byNumber = new Map<number, string[]>();
   const burned: Record<string, string> = {};
   const unparsed: { mint: string; name: string }[] = [];
 
+  const seen = new Set<string>();
   for (const asset of assets) {
+    if (seen.has(asset.id)) continue;
+    seen.add(asset.id);
     const inCollection = asset.grouping?.some((g) => g.group_key === "collection" && g.group_value === collection);
-    if (!inCollection) continue;
+    const byCreator = asset.creators?.some((c) => c.address === creator && c.verified);
+    if (!inCollection && !byCreator) continue;
     const name = asset.content?.metadata?.name ?? "";
     const n = pandaNumber(name);
     if (n === null) {
@@ -97,6 +105,7 @@ export function buildIndex(assets: DasAsset[], collection: string, generatedAt: 
   return {
     generatedAt,
     collection,
+    creator,
     count: Object.keys(pandas).length,
     pandas,
     duplicates,

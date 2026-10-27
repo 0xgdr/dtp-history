@@ -2,6 +2,10 @@ export const TOKEN_METADATA_PROGRAM_ID = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt5
 
 export const DTP_COLLECTION_MINT = "GoLMLLR6iSUrA6KsCrFh7f45Uq5EHFQ3p8RmzPoUH9mb";
 
+// The candy machine creator, verified on every Panda at mint. Some Pandas (e.g. #5642) have their
+// collection field pointing elsewhere and unverified, so this is what proves they belong.
+export const DTP_CREATOR = "CLErvyrMpi66RAxNV2wveSi25NxHb8G383MSVuGDgZzp";
+
 // The six traits that decide the verdict. Everything else is cosmetic.
 export const TRAITS = ["HEAD", "BODY", "MOUTH", "GLASSES", "BACKGROUND", "FUR"] as const;
 

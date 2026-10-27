@@ -1,4 +1,4 @@
-import { DTP_COLLECTION_MINT } from "./constants.ts";
+import { DTP_COLLECTION_MINT, DTP_CREATOR } from "./constants.ts";
 import type { Cache } from "./cache.ts";
 import { decodeMetadataAccount, type MetadataAccount } from "./decode/metadata-account.ts";
 import { decodeMetadataEvents, type MetadataEvent } from "./decode/metadata-ix.ts";
@@ -248,7 +248,12 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   warnings.push(...result.warnings);
   if (burned) warnings.push("metadata account does not exist: the Panda is burned or closed");
   if (account && (account.collection?.key !== DTP_COLLECTION_MINT || !account.collection.verified)) {
-    warnings.push("not a verified Degenerate Trash Panda (collection mismatch)");
+    const byCreator = account.data.creators?.some((c) => c.address === DTP_CREATOR && c.verified);
+    warnings.push(
+      byCreator
+        ? "collection field is not the verified DTP collection, but the DTP creator is verified"
+        : "not a verified Degenerate Trash Panda (collection mismatch)",
+    );
   }
   if (baselineUncertain) warnings.push("no Create instruction found: the earliest decoded data is used as the baseline");
   if (historyIncomplete) warnings.push("history is incomplete: some transactions were unavailable or the account URI was not reached");
