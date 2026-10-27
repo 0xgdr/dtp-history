@@ -11,6 +11,9 @@ bun install
 cp .env.example .env   # then set RPC_URL
 ```
 
+`.env` can also be a 1Password Environment mount. Bun's automatic `.env` loading skips that
+named pipe, so the `dev`, `index` and `fixtures` scripts pass `--env-file=.env` explicitly.
+
 | Var | Default | Notes |
 |---|---|---|
 | `RPC_URL` | public mainnet RPC | Full endpoint including any provider key (e.g. Helius `?api-key=`). Secret: never logged, only its host. |

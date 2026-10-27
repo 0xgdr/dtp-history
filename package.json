@@ -7,13 +7,13 @@
     "bun": "1.4.3"
   },
   "scripts": {
-    "dev": "bun --hot src/server.ts",
+    "dev": "bun --env-file=.env --hot src/server.ts",
     "build": "bun scripts/build-page.ts && bun scripts/build-server.ts",
     "start": "NODE_ENV=production bun src/server.ts",
     "test": "bun test",
     "typecheck": "bun check",
-    "index": "bun scripts/build-index.ts",
-    "fixtures": "bun scripts/record-fixtures.ts"
+    "index": "bun --env-file=.env scripts/build-index.ts",
+    "fixtures": "bun --env-file=.env scripts/record-fixtures.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

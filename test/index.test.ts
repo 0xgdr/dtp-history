@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DTP_COLLECTION_MINT } from "../src/constants.ts";
+import { DTP_COLLECTION_MINT, DTP_CREATOR } from "../src/constants.ts";
 import { buildIndex, pandaNumber, parseInput, resolve, type DasAsset } from "../src/index-lookup.ts";
 
 const asset = (id: string, name: string, extra: Partial<DasAsset> = {}): DasAsset => ({
@@ -54,18 +54,30 @@ describe("buildIndex", () => {
       asset("m6", "Degen Trash Panda #6"),
       asset("odd", "Some Other Thing"),
       asset("foreign", "Degen Trash Panda #2", { grouping: [{ group_key: "collection", group_value: "Elsewhere" }] }),
+      asset("fake", "Degen Trash Panda #2", {
+        grouping: [],
+        creators: [{ address: DTP_CREATOR, verified: false }],
+      }),
+      // Like #5642: collection points elsewhere, unverified, but the DTP creator is verified.
+      asset("m7", "Degen Trash Panda #7", {
+        grouping: [],
+        creators: [{ address: DTP_CREATOR, verified: true }],
+      }),
+      // Returned by both getAssetsByGroup and getAssetsByCreator.
+      asset("m6", "Degen Trash Panda #6", { creators: [{ address: DTP_CREATOR, verified: true }] }),
     ],
     DTP_COLLECTION_MINT,
+    DTP_CREATOR,
     "2026-10-20T00:00:00.000Z",
   );
 
   test("sorts assets into pandas, duplicates, burned, missing and unparsed", () => {
-    expect(index.pandas).toEqual({ "1": "m1", "6": "m6" });
+    expect(index.pandas).toEqual({ "1": "m1", "6": "m6", "7": "m7" });
     expect(index.duplicates).toEqual({ "3": ["m3a", "m3b"] });
     expect(index.burned).toEqual({ "4": "m4" });
     expect(index.missing).toEqual([2, 5]);
     expect(index.unparsed).toEqual([{ mint: "odd", name: "Some Other Thing" }]);
-    expect(index.count).toBe(2);
+    expect(index.count).toBe(3);
   });
 
   test("resolve covers every case", () => {
