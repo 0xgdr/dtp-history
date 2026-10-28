@@ -12,7 +12,10 @@ import { decodeMetadataAccount } from "../src/decode/metadata-account.ts";
 import { metadataPda } from "../src/pda.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
 import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/index-lookup.ts";
-import { buildLists, LIST_KINDS } from "../src/lists.ts";
+import { memoryCache } from "../src/cache.ts";
+import { buildHistory } from "../src/history.ts";
+import { createFetcher } from "../src/json-fetch.ts";
+import { buildLists, LIST_KINDS, LOST_HOST } from "../src/lists.ts";
 import { createRpc, RpcError } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
@@ -108,6 +111,21 @@ for (const entry of new Set(Object.values(lists).flatMap((l) => (Array.isArray(l
   } catch {
     console.log(`#${entry.n}: no image (${uri} unreadable)`);
   }
+}
+// Art last hosted on Shadow Drive is gone, but a history can still hold earlier art: show that
+// instead. Only a handful of Pandas, so building their histories here is cheap.
+const lostArt = new Map<string, { image: string; at: string } | null>();
+for (const entry of LIST_KINDS.flatMap((k) => lists[k])) {
+  if (!entry.image || new URL(entry.image).host !== LOST_HOST) continue;
+  if (!lostArt.has(entry.mint)) {
+    const cache = memoryCache();
+    const history = await buildHistory(entry.mint, { rpc, fetcher: createFetcher(cache), cache });
+    const step = history.steps.findLast((s) => s.json && s.image && new URL(s.image).host !== LOST_HOST);
+    lostArt.set(entry.mint, step?.image && step.dateUtc ? { image: step.image, at: step.dateUtc } : null);
+    console.log(`#${entry.n}: art lost; ${step ? `last readable art ${step.dateUtc?.slice(0, 10)}` : "no readable art in its history"}`);
+  }
+  const art = lostArt.get(entry.mint);
+  if (art) entry.lastArt = art;
 }
 await Bun.write(LISTS, `${JSON.stringify(lists)}\n`);
 console.log(

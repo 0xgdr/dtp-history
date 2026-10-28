@@ -6,6 +6,7 @@ import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/e
 import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import { LOST_HOST, type ListEntry, type ListKind } from "../src/lists.ts";
+import { thumbSourceOk } from "../src/thumb-source.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -362,7 +363,7 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
       h(
         "figure",
         { class: "story-art" },
-        lookupLink(e.art.n, thumb(e.art.image, name, "story-img"), { "aria-label": name }),
+        lookupLink(e.art.n, thumb(thumbUrl(e.art.image), name, "story-img"), { "aria-label": name }),
         h("span", { class: "story-stamp", "aria-hidden": "true" }, e.stamp),
       ),
       h(
@@ -471,21 +472,45 @@ function renderGridPanda(p: ListEntry): HTMLElement {
   const lost = p.image !== null && hostOf(p.image) === LOST_HOST;
   return h(
     "li",
-    { class: `grid-panda${p.burned ? " burned" : ""}` },
+    { class: `grid-panda${p.burned ? " burned" : ""}${lost ? " art-lost" : ""}` },
     lookupLink(
       String(p.n),
       h(
         "span",
         { class: "grid-card" },
-        lost ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive") : thumb(p.image, name, "grid-img"),
+        // Art lost with Shadow Drive: the last art its history can read, or say it's gone.
+        lost && p.lastArt
+          ? lostStamped(thumb(thumbUrl(p.lastArt.image), `${name}, last readable art`, "grid-img"))
+          : lost
+            ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive")
+            : thumb(thumbUrl(p.image), name, "grid-img"),
         p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
         h("span", { class: "grid-n" }, `#${p.n}`),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
         p.note ? h("span", { class: "grid-stat" }, p.note) : "",
+        lost && p.lastArt
+          ? h("span", { class: "grid-stat" }, `Last readable art, ${shortDate(Date.parse(p.lastArt.at) / 1000)}. Current art lost.`)
+          : "",
       ),
-      { "aria-label": `${name}${p.burned ? ", burned" : ""}` },
+      { "aria-label": `${name}${p.burned ? ", burned" : ""}${lost ? ", current art lost" : ""}` },
     ),
   );
+}
+
+// Old art shown in place of art lost with Shadow Drive, stamped so it isn't taken for the current art.
+function lostStamped(frame: HTMLElement): HTMLElement {
+  frame.append(h("span", { class: "lost-stamp", "aria-hidden": "true" }, "Art lost"));
+  return frame;
+}
+
+// When a Panda's current metadata or art is on Shadow Drive (gone), the last art its history can
+// read, to show flagged. Only for Shadow Drive, so a fetch that merely failed isn't called lost.
+function lostArtOf(r: HistoryResult): { image: string; at: number | null; metadataLost: boolean } | null {
+  const metadataLost = r.current.jsonUri !== null && hostOf(r.current.jsonUri) === LOST_HOST;
+  const artLost = r.current.image !== null && hostOf(r.current.image) === LOST_HOST;
+  if (!metadataLost && !artLost) return null;
+  const last = r.steps.findLast((s) => s.json && s.image && hostOf(s.image) !== LOST_HOST);
+  return last?.image ? { image: last.image, at: last.blockTime, metadataLost } : null;
 }
 
 function homeLink(): HTMLElement {
@@ -572,13 +597,18 @@ function renderHero(r: HistoryResult): HTMLElement {
   const stamp = STAMP[r.verdict];
   const mintDate = longDate(r.steps[0]?.blockTime ?? null);
   const changed = r.verdictChanges.map((c) => (c.field === "image" ? "the art" : titleCase(c.field)));
+  const lostArt = lostArtOf(r);
+  // Unknown because the current metadata is on Shadow Drive: that won't change by trying again.
+  const lostForGood = r.verdict === "Unknown" && Boolean(lostArt?.metadataLost);
 
-  const headline = {
-    Original: "Untouched since mint",
-    "Traits/art changed": "Swapped since mint",
-    Exalted: "Exalted since mint",
-    Unknown: "Can't tell yet",
-  }[r.verdict];
+  const headline = lostForGood
+    ? "Can't tell"
+    : {
+        Original: "Untouched since mint",
+        "Traits/art changed": "Swapped since mint",
+        Exalted: "Exalted since mint",
+        Unknown: "Can't tell yet",
+      }[r.verdict];
   const exaltedOn = longDate(r.exaltedAt);
   const detail =
     r.verdict === "Original"
@@ -587,9 +617,17 @@ function renderHero(r: HistoryResult): HTMLElement {
         ? `The background changed when it was exalted${exaltedOn ? ` on ${exaltedOn}` : ""}. All six traits match the mint.`
       : r.verdict === "Traits/art changed"
         ? `${capitalise(listJoin(changed))} ${changed.length === 1 ? "differs" : "differ"} from the mint${mintDate ? ` on ${mintDate}` : ""}.`
-        : sentence(r.warnings[0] ?? "Part of the history couldn't be fetched.");
+        : lostForGood
+          ? "Its current metadata is lost with GenesysGo Shadow Drive, so its traits today can't be read."
+          : sentence(r.warnings[0] ?? "Part of the history couldn't be fetched.");
 
   const notes: string[] = [];
+  if (lostArt) {
+    const when = longDate(lostArt.at);
+    notes.push(
+      `Its current ${lostArt.metadataLost ? "metadata and art are" : "art is"} lost with GenesysGo Shadow Drive. The art shown is the last that can still be read${when ? `, from ${when}` : ""}.`,
+    );
+  }
   if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
   const immortal = r.series === "Immortal";
   // A burned Panda's warning says how it was burned (see src/history.ts).
@@ -600,8 +638,10 @@ function renderHero(r: HistoryResult): HTMLElement {
     { class: `hero ${stamp.cls}` },
     h(
       "figure",
-      { class: `hero-art${r.burned ? " burned" : ""}` },
-      thumb(r.current.image, r.number !== null ? `Degen Trash Panda #${r.number}` : "This Panda's current art", "hero-img"),
+      { class: `hero-art${r.burned ? " burned" : ""}${lostArt ? " art-lost" : ""}` },
+      lostArt
+        ? lostStamped(thumb(lostArt.image, `Degen Trash Panda #${r.number}, last readable art`, "hero-img"))
+        : thumb(r.current.image, r.number !== null ? `Degen Trash Panda #${r.number}` : "This Panda's current art", "hero-img"),
       h("span", { class: `stamp ${stamp.cls}`, "aria-hidden": "true" }, stamp.text),
     ),
     h(
@@ -663,22 +703,27 @@ function renderTraits(r: HistoryResult): HTMLElement {
       h("dd", { class: "status" }, status),
     );
   const same = () => h("span", { class: "same", title: "Same as at mint" }, "✓");
+  // An Unknown verdict compared nothing: no change found isn't the same as unchanged.
+  const unread = () => h("span", { class: "unread", title: "Its current traits couldn't be read" }, "can't read now");
+  const unknown = r.verdict === "Unknown";
 
   const imageChange = changed.get("image");
   const exaltArt = r.verdict === "Exalted";
   const imageStatus =
     imageChange && r.current.image
       ? h("span", {}, exaltArt ? "changed when exalted, " : "now ", safeLink(r.current.image, exaltArt ? "see it" : "different"))
-      : r.imageCheck === "unknown"
-        ? "not compared"
-        : same();
+      : unknown
+        ? unread()
+        : r.imageCheck === "unknown"
+          ? "not compared"
+          : same();
 
   return h(
     "dl",
     { class: "traits", "aria-label": "Traits at mint and now" },
     ...TRAITS.map((t) => {
       const c = changed.get(t);
-      return row(titleCase(t), mint.get(t) ?? "none", c ? `now ${c.to ?? "missing"}` : same(), Boolean(c));
+      return row(titleCase(t), mint.get(t) ?? "none", c ? `now ${c.to ?? "missing"}` : unknown ? unread() : same(), Boolean(c));
     }),
     row("Art", r.original.image ? safeLink(r.original.image, "original image") : "none", imageStatus, Boolean(imageChange) && !exaltArt),
     exaltedRow(r, mint.get(EXALTED) ?? null),
@@ -1057,8 +1102,13 @@ function safeLink(url: string, text: string): Child {
 
 // The frame holds the grey placeholder and a loading spinner (CSS, shown only if loading is
 // slow); the image fades in over it once it has loaded.
+// Our own small copy of an Arweave/ArDrive image (src/thumb.ts), for tiles; anything else as is.
+function thumbUrl(src: string | null): string | null {
+  return src && thumbSourceOk(src) ? `/thumb?src=${encodeURIComponent(src)}` : src;
+}
+
 function thumb(url: string | null, alt: string, cls = ""): HTMLElement {
-  if (!url || !isHttp(url)) return h("div", { class: `thumb empty ${cls}` }, "No image");
+  if (!url || !(isHttp(url) || url.startsWith("/thumb?"))) return h("div", { class: `thumb empty ${cls}` }, "No image");
   const img = h("img", { class: "thumb-img", alt, loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
   const frame = h("div", { class: `thumb loading ${cls}` }, img);
   img.addEventListener("load", () => {

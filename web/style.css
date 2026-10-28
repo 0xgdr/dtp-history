@@ -559,6 +559,39 @@ main {
   color: var(--muted);
 }
 
+/* Old art standing in for art lost with Shadow Drive: dimmed, and stamped so it isn't taken for the
+   Panda's art today. */
+.art-lost .thumb {
+  position: relative;
+}
+
+.art-lost .thumb-img {
+  filter: sepia(0.5) brightness(0.55);
+}
+
+.lost-stamp {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: 3px 10px 4px;
+  color: var(--sticker);
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+  border: 3px double var(--sticker);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  pointer-events: none;
+}
+
+.hero-art .lost-stamp {
+  font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+}
+
 .grid-burned {
   position: absolute;
   left: 4px;
@@ -962,6 +995,11 @@ main {
 
 .same {
   color: var(--ok);
+}
+
+.status .unread {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .trait.changed dd,

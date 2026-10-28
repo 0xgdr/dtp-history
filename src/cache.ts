@@ -6,7 +6,12 @@ export type Namespace = "tx" | "json" | "imghash" | "history" | "building";
 export type Cache = {
   get<T>(ns: Namespace, key: string): Promise<T | null>;
   set(ns: Namespace, key: string, value: unknown): Promise<void>;
+  // Binary entries (thumbnails), stored as-is with their content type.
+  getBytes(ns: BytesNamespace, key: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  setBytes(ns: BytesNamespace, key: string, bytes: Uint8Array<ArrayBuffer>, type: string): Promise<void>;
 };
+
+export type BytesNamespace = "thumb";
 
 // One JSON file per entry under `<dir>/<namespace>/`. Writes go to a temp file and are renamed
 // into place, so a crash never leaves a half-written entry behind.
@@ -23,13 +28,23 @@ export function fileCache(dir: string): Cache {
       }
     },
     async set(ns, key, value) {
-      await mkdir(`${dir}/${ns}`, { recursive: true });
-      const path = pathFor(ns, key);
-      const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
-      await Bun.write(tmp, JSON.stringify(value));
-      await rename(tmp, path);
+      await writeAtomically(`${dir}/${ns}`, pathFor(ns, key), JSON.stringify(value));
+    },
+    async getBytes(ns, key) {
+      const file = Bun.file(`${dir}/${ns}/${safeKey(key)}`);
+      return (await file.exists()) ? await file.bytes() : null;
+    },
+    async setBytes(ns, key, bytes) {
+      await writeAtomically(`${dir}/${ns}`, `${dir}/${ns}/${safeKey(key)}`, bytes);
     },
   };
+}
+
+async function writeAtomically(dir: string, path: string, data: string | Uint8Array): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await Bun.write(tmp, data);
+  await rename(tmp, path);
 }
 
 type Bucket = Pick<S3Client, "file">;
@@ -56,6 +71,21 @@ export function s3Cache(bucket: Bucket, prefix = ""): Cache {
         console.warn(`cache write ${ns}/${key}: ${errMessage(err)}`);
       }
     },
+    async getBytes(ns, key) {
+      try {
+        return await bucket.file(`${prefix}${ns}/${safeKey(key)}`).bytes();
+      } catch (err) {
+        if ((err as { code?: string }).code !== "NoSuchKey") console.warn(`cache read ${ns}/${key}: ${errMessage(err)}`);
+        return null;
+      }
+    },
+    async setBytes(ns, key, bytes, type) {
+      try {
+        await bucket.file(`${prefix}${ns}/${safeKey(key)}`).write(bytes, { type });
+      } catch (err) {
+        console.warn(`cache write ${ns}/${key}: ${errMessage(err)}`);
+      }
+    },
   };
 }
 
@@ -71,6 +101,12 @@ export function memoryCache(): Cache {
     },
     async set(ns, key, value) {
       store.set(`${ns}/${key}`, structuredClone(value));
+    },
+    async getBytes(ns, key) {
+      return (store.get(`${ns}/${key}`) as Uint8Array<ArrayBuffer> | undefined) ?? null;
+    },
+    async setBytes(ns, key, bytes) {
+      store.set(`${ns}/${key}`, bytes.slice());
     },
   };
 }
