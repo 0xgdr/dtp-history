@@ -63,12 +63,12 @@ describe("buildIndex", () => {
         grouping: [],
         creators: [{ address: DTP_CREATORS[0], verified: true }],
       }),
-      // Like #14162: second mint, collection field wrong.
+      // Like #14162: an Immortal, in the Immortal collection, found by its creator.
       asset("m8", "Degen Trash Panda #8", {
         grouping: [],
         creators: [{ address: DTP_CREATORS[1], verified: true }],
       }),
-      // Like #13868: second mint, collection field wrong, burned. Only burnt searchAssets returns it.
+      // Like #13868: a burned Immortal. Only burnt searchAssets returns it.
       asset("m9", "Degen Trash Panda #9", {
         grouping: [],
         creators: [{ address: DTP_CREATORS[1], verified: true }],
