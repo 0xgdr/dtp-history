@@ -7,14 +7,20 @@ import { buildLists } from "../src/lists.ts";
 import type { Fetcher } from "../src/json-fetch.ts";
 import type { Rpc } from "../src/rpc.ts";
 
-type Options = { stat?: string; collection?: string; burnt?: boolean; image?: string; jsonUri?: string };
-const panda = (id: string, n: number, { stat, collection = DTP_COLLECTION_MINT, burnt, image, jsonUri }: Options = {}): DasAsset => ({
+type Options = { stat?: string; collection?: string; burnt?: boolean; image?: string; jsonUri?: string; traits?: Record<string, string> };
+const panda = (id: string, n: number, { stat, collection = DTP_COLLECTION_MINT, burnt, image, jsonUri, traits = {} }: Options = {}): DasAsset => ({
   id,
   burnt,
   grouping: [{ group_key: "collection", group_value: collection }],
   creators: [{ address: DTP_CREATORS[0], verified: true }],
   content: {
-    metadata: { name: `Degen Trash Panda #${n}`, attributes: stat ? [{ trait_type: "EXALTED_STAT", value: stat }] : [] },
+    metadata: {
+      name: `Degen Trash Panda #${n}`,
+      attributes: [
+        ...Object.entries(traits).map(([trait_type, value]) => ({ trait_type, value })),
+        ...(stat ? [{ trait_type: "EXALTED_STAT", value: stat }] : []),
+      ],
+    },
     links: { image: image ?? `https://arweave.net/${id}` },
     json_uri: jsonUri ?? `https://arweave.net/${id}.json`,
   },
@@ -91,5 +97,30 @@ describe("GET /api/list/:kind", () => {
 
   test("an unknown list is a 404", () => {
     expect(api.list("swapped").status).toBe(404);
+  });
+});
+
+describe("original: six traits against the mint", () => {
+  const six = { HEAD: "Sock", BODY: "T-Shirt", MOUTH: "Cigar - Grin", GLASSES: "No Traits", BACKGROUND: "Red", FUR: "Red - Grin" };
+  const swapped = { ...six, HEAD: "Crown" };
+  const traitAssets = [
+    panda("o1", 1, { stat: "WEN: Soon", traits: six }),
+    panda("o2", 2, { stat: "WEN: Soon", traits: swapped }),
+    panda("o3", 3, { stat: "WEN: Soon", traits: six }),
+    panda("o4", 4, { stat: "WEN: Soon", traits: six, jsonUri: "https://shdw-drive.genesysgo.net/x/4.json" }),
+  ];
+  const traitIndex = buildIndex(traitAssets, DTP_COLLECTION_MINT, DTP_CREATORS, "2026-10-28T00:00:00.000Z");
+  const mint = { traits: six };
+  const traitLists = buildLists(traitAssets, traitIndex, new Map(), { "1": mint, "2": mint, "3": { error: "metadata unreadable" }, "4": mint });
+  const byN = new Map(traitLists.exalted.map((e) => [e.n, e.original]));
+
+  test("all six the same is original; any swap isn't", () => {
+    expect(byN.get(1)).toBe(true);
+    expect(byN.get(2)).toBe(false);
+  });
+
+  test("unknown when the mint traits or the current ones can't be read", () => {
+    expect(byN.get(3)).toBeUndefined();
+    expect(byN.get(4)).toBeUndefined();
   });
 });

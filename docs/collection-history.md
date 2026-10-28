@@ -13,6 +13,7 @@ chain. Counts are as of 28 October 2026.
 | `data/extra-mints.json` | Pandas DAS won't list (token burned), fetched by id on every build | the index build adds to it | — |
 | `data/original-mints.json` | Every mint the original candy machine made, in mint order | `scripts/find-unlisted-mints.ts` | ~16,000 calls, ~50 min; never needs re-running |
 | `data/metadata-snapshot.json` | Every Panda's on-chain metadata URI and collection status | `scripts/snapshot-metadata.ts` | ~200 calls |
+| `data/mint-traits.json` | Every Panda's six traits, art and date on mint day | `scripts/mint-traits.ts` | ~40,000 calls + 20,000 Arweave fetches, ~2½ hours; never needs re-running |
 
 ## The numbers
 
@@ -121,3 +122,24 @@ accounts are gone, so nothing can be updated.
 Searching Token Metadata by name finds copycats: e.g. "Degen Trash Panda #6872" and "#8669" each
 exist a second time from creator `EpRFqi…`, update authority `BV8MTE…`, with no collection. The
 index never picks them, because a Panda must be in a DTP collection or carry a verified DTP creator.
+
+## Mint-day traits
+
+`data/mint-traits.json` has every Panda's six traits as minted, read from the Create instruction
+in its metadata account's first transaction and the file it points at. Against today's traits:
+
+| Grid | All six as minted | Swapped |
+|---|---|---|
+| Exalted (693) | 507 | 184 |
+| Un-exalted (9) | 0 | 9 |
+| Immortals (2,395) | 2,395 | 0 |
+
+The six still on Shadow Drive can't be compared; their current traits are unreadable.
+
+Two things it took to read them all:
+
+- **Helius returns some early-2022 transactions incomplete.** Four Candy Machine v2 mints (#14381,
+  #14516, #14584, #15406, 15–16 March 2022) came back with no inner instructions and no logs,
+  hiding the Create inside the candy machine's instruction. Solana's public RPC has them whole.
+- **Arweave had an outage** during the run (gateway timeouts, a 504 from its own GraphQL), so 248
+  files failed first time; all were read on a retry.

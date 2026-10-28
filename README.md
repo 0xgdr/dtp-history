@@ -35,6 +35,7 @@ bun run index      # rebuild data/panda-index.json (needs a DAS-capable RPC_URL,
 bun run fixtures   # re-record test/fixtures/6872 (needs RPC_URL)
 bun --env-file=.env scripts/find-unlisted-mints.ts  # one-off, ~50 min: see below
 bun --env-file=.env scripts/snapshot-metadata.ts    # every Panda's on-chain metadata URI (~200 calls)
+bun --env-file=.env scripts/mint-traits.ts          # one-off, ~2½ h: every Panda's mint-day traits
 ```
 
 `docs/collection-history.md` records what the chain shows about the collection (candy machines,

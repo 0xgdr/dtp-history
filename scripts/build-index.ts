@@ -15,8 +15,18 @@ import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/in
 import { memoryCache } from "../src/cache.ts";
 import { buildHistory } from "../src/history.ts";
 import { createFetcher } from "../src/json-fetch.ts";
-import { buildLists, LIST_KINDS, LOST_HOST } from "../src/lists.ts";
+import { buildLists, LIST_KINDS, LOST_HOST, type MintTraitsByNumber } from "../src/lists.ts";
 import { createRpc, RpcError } from "../src/rpc.ts";
+import { sourcesFor } from "../src/thumb.ts";
+
+// Arweave and ArDrive both serve any Arweave id; try the other when one fails (see src/thumb.ts).
+const sourcesForJson = (uri: string) => {
+  try {
+    return sourcesFor(uri);
+  } catch {
+    return [uri];
+  }
+};
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
 const EXTRA = `${import.meta.dir}/../data/extra-mints.json`;
@@ -99,19 +109,41 @@ for (const mint of offCollection) {
   const info = await rpc.call<{ value: { data: [string, string] } | null }>("getAccountInfo", [await metadataPda(mint), { encoding: "base64" }]);
   collections.set(mint, info.value ? (decodeMetadataAccount(Buffer.from(info.value.data[0], "base64")).collection?.key ?? null) : null);
 }
-const lists = buildLists(assets, index, collections);
-// DAS hasn't read every Panda's metadata file, so for the few without an image, read it here.
-const jsonUri = new Map(assets.map((a) => [a.id, a.content?.json_uri]));
-for (const entry of new Set(Object.values(lists).flatMap((l) => (Array.isArray(l) ? l : [])))) {
-  const uri = entry.image === null ? jsonUri.get(entry.mint) : undefined;
-  if (!uri) continue;
-  try {
-    const json = (await (await fetch(uri, { signal: AbortSignal.timeout(15_000) })).json()) as { image?: unknown };
-    if (typeof json.image === "string" && /^https?:\/\//.test(json.image)) entry.image = json.image;
-  } catch {
-    console.log(`#${entry.n}: no image (${uri} unreadable)`);
-  }
+// Mint-day traits (scripts/mint-traits.ts), to mark grid Pandas whose traits were never swapped.
+const MINT_TRAITS = `${import.meta.dir}/../data/mint-traits.json`;
+const mintTraits = (await Bun.file(MINT_TRAITS).exists()) ? ((await Bun.file(MINT_TRAITS).json()) as { pandas: MintTraitsByNumber }).pandas : {};
+// DAS hasn't read every Panda's metadata file (e.g. 15 Immortals have no image or traits there), so
+// read those few here, before the lists compare traits. Shadow Drive files are gone; skip them.
+const unread = new Map<string, string>();
+for (const a of assets) {
+  const uri = a.content?.json_uri;
+  if (!indexed.has(a.id) || !uri || new URL(uri).host === LOST_HOST) continue;
+  if (!a.content?.links?.image || !a.content.metadata?.attributes?.length) unread.set(a.id, uri);
 }
+const readFiles = new Map<string, { image?: unknown; attributes?: unknown }>();
+for (const [mint, uri] of unread) {
+  for (const url of sourcesForJson(uri)) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (res.ok) {
+        readFiles.set(mint, await res.json());
+        break;
+      }
+    } catch {
+      // try the next gateway
+    }
+  }
+  if (!readFiles.has(mint)) console.log(`${mint}: metadata unreadable (${uri})`);
+}
+for (const a of assets) {
+  const json = readFiles.get(a.id);
+  if (!json || !a.content) continue;
+  if (typeof json.image === "string" && /^https?:\/\//.test(json.image)) a.content.links = { ...a.content.links, image: json.image };
+  if (Array.isArray(json.attributes)) a.content.metadata = { ...a.content.metadata, attributes: json.attributes };
+}
+console.log(`metadata read directly: ${readFiles.size} of ${unread.size}`);
+
+const lists = buildLists(assets, index, collections, mintTraits);
 // Art last hosted on Shadow Drive is gone, but a history can still hold earlier art: show that
 // instead. Only a handful of Pandas, so building their histories here is cheap.
 const lostArt = new Map<string, { image: string; at: string } | null>();
