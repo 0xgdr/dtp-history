@@ -15,7 +15,7 @@ import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/in
 import { memoryCache } from "../src/cache.ts";
 import { buildHistory } from "../src/history.ts";
 import { createFetcher } from "../src/json-fetch.ts";
-import { buildLists, LIST_KINDS, LOST_HOST, type MintTraitsByNumber } from "../src/lists.ts";
+import { artIdsToDate, buildLists, LIST_KINDS, LOST_HOST, type ArtUploads, type MintTraitsByNumber } from "../src/lists.ts";
 import { createRpc, RpcError } from "../src/rpc.ts";
 import { sourcesFor } from "../src/thumb.ts";
 
@@ -143,7 +143,23 @@ for (const a of assets) {
 }
 console.log(`metadata read directly: ${readFiles.size} of ${unread.size}`);
 
-const lists = buildLists(assets, index, collections, mintTraits);
+// When each Panda's current art was uploaded, from Arweave's index: art from 2022 on means a Boots
+// swap (see ListEntry.original). Upload dates never change, so they're kept in data/art-uploads.json
+// and only new files are looked up.
+const ART_UPLOADS = `${import.meta.dir}/../data/art-uploads.json`;
+const artUploads: ArtUploads = (await Bun.file(ART_UPLOADS).exists()) ? await Bun.file(ART_UPLOADS).json() : {};
+const undated = artIdsToDate(assets, index, mintTraits).filter((id) => !(id in artUploads));
+for (let i = 0; i < undated.length; i += 100) {
+  const ids = undated.slice(i, i + 100);
+  const found = await uploadTimes(ids);
+  // Only record what Arweave's index answered, so a failed lookup is retried next build.
+  if (found) for (const id of ids) artUploads[id] = found.get(id) ?? null;
+}
+const sorted = Object.keys(artUploads).sort();
+await Bun.write(ART_UPLOADS, `{\n${sorted.map((id) => `  ${JSON.stringify(id)}: ${artUploads[id]}`).join(",\n")}\n}\n`);
+console.log(`art upload dates: ${sorted.length} known, ${undated.length} looked up`);
+
+const lists = buildLists(assets, index, collections, mintTraits, artUploads);
 // Art last hosted on Shadow Drive is gone, but a history can still hold earlier art: show that
 // instead. Only a handful of Pandas, so building their histories here is cheap.
 const lostArt = new Map<string, { image: string; at: string } | null>();
@@ -170,4 +186,28 @@ console.log(
 if (index.count < 10_000) {
   console.error(`count ${index.count} is below 10000: paging probably failed`);
   process.exit(1);
+}
+
+// Upload times (block timestamps) of Arweave ids, from Arweave's GraphQL index, with a second
+// gateway when the first is down. Null when neither answered.
+async function uploadTimes(ids: string[]): Promise<Map<string, number | null> | null> {
+  const query = `{ transactions(ids: ${JSON.stringify(ids)}, first: ${ids.length}) { edges { node { id block { timestamp } } } } }`;
+  for (const url of ["https://arweave.net/graphql", "https://arweave-search.goldsky.com/graphql"]) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { data?: { transactions: { edges: { node: { id: string; block: { timestamp: number } | null } }[] } } };
+      if (!body.data) continue;
+      return new Map(body.data.transactions.edges.map((e) => [e.node.id, e.node.block?.timestamp ?? null]));
+    } catch {
+      // try the next gateway
+    }
+  }
+  console.log(`art upload dates: ${ids.length} not looked up (Arweave's index didn't answer)`);
+  return null;
 }
