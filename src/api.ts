@@ -28,6 +28,8 @@ const FAILURE_TTL_MS = 60_000;
 type BuildMarker = { at: number; progress: BuildProgress | null };
 type Building = { building: BuildProgress | null };
 
+export type Stats = { numbers: number; live: number; burned: number; missing: number[]; generatedAt: string };
+
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
   let numbers: number[] | undefined;
@@ -156,6 +158,17 @@ export function createApi(deps: ApiDeps) {
       const input = parseInput(safeDecode(raw));
       if (input.type !== "mint") return error(400, "bad_input", "not a base58 mint address");
       return respond(input.mint, null);
+    },
+
+    // The index's counts, for the home page, so they never drift from it.
+    stats(): Response {
+      if (!deps.index) return error(503, "no_index", "the Panda index has not been built (bun run index)");
+      const { pandas, burned, duplicates, missing, generatedAt } = deps.index;
+      const numbers = Math.max(0, ...[pandas, burned, duplicates].flatMap((m) => Object.keys(m).map(Number)));
+      return Response.json(
+        { numbers, live: deps.index.count, burned: Object.keys(burned).length, missing, generatedAt } satisfies Stats,
+        { headers: { "cache-control": "public, max-age=300" } },
+      );
     },
 
     // A random Panda number from the index, so the page never lands on a missing number.

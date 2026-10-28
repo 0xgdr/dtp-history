@@ -36,7 +36,7 @@ function emptyTx(info: SigInfo): RawTransaction {
   };
 }
 
-async function fixtureRpc(overrides: { signatures?: SigInfo[]; account?: unknown; dropTx?: string } = {}) {
+async function fixtureRpc(overrides: { signatures?: SigInfo[]; account?: unknown; dropTx?: string; supply?: string } = {}) {
   const signatures = overrides.signatures ?? (await fixture<SigInfo[]>("signatures.json"));
   const account = overrides.account ?? (await fixture("account.json"));
   const txs = await loadTxs();
@@ -56,6 +56,10 @@ async function fixtureRpc(overrides: { signatures?: SigInfo[]; account?: unknown
         return (txs.get(first) ?? emptyTx(info)) as T;
       }
       if (method === "getAccountInfo") return account as T;
+      if (method === "getTokenSupply") {
+        expect(first).toBe(MINT_6872);
+        return { value: { amount: overrides.supply ?? "1", decimals: 0 } } as T;
+      }
       throw new Error(`unexpected ${method}`);
     },
   };
@@ -145,7 +149,15 @@ describe("#6872 full pipeline", () => {
     const { rpc, calls } = await fixtureRpc();
     const again = await buildHistory(MINT_6872, { rpc, fetcher, cache });
     expect(again.verdict).toBe("Original");
-    expect(calls).toEqual(["getSignaturesForAddress"]);
+    expect(calls).toEqual(["getSignaturesForAddress", "getTokenSupply"]);
+  });
+
+  test("a token burned after the history was cached rebuilds it, though no metadata signature is new", async () => {
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+    await buildHistory(MINT_6872, { rpc: (await fixtureRpc()).rpc, fetcher, cache });
+    const again = await buildHistory(MINT_6872, { rpc: (await fixtureRpc({ supply: "0" })).rpc, fetcher, cache });
+    expect(again.burned).toBe(true);
   });
 
   test("an unavailable tx marks the history incomplete and is not cached", async () => {
@@ -165,6 +177,14 @@ describe("#6872 full pipeline", () => {
     const result = await buildHistory(MINT_6872, { rpc, fetcher: await fixtureFetcher(), cache: memoryCache() });
     expect(result.burned).toBe(true);
     expect(result.steps).toHaveLength(10);
+  });
+
+  test("a token burn (supply 0) means burned, though the metadata account remains", async () => {
+    const { rpc } = await fixtureRpc({ supply: "0" });
+    const result = await buildHistory(MINT_6872, { rpc, fetcher: await fixtureFetcher(), cache: memoryCache() });
+    expect(result.burned).toBe(true);
+    expect(result.verdict).toBe("Original");
+    expect(result.warnings).toEqual(["its token was burned (supply 0), though its metadata is still on chain"]);
   });
 });
 
@@ -270,7 +290,8 @@ describe("API", () => {
     await b.mint(MINT_6872);
     release();
     await Bun.sleep(10);
-    expect(calls.length).toBe(coldCalls + 1); // one getSignaturesForAddress(limit 1) from the single revalidate
+    // The single revalidate: getSignaturesForAddress(limit 1) and getTokenSupply.
+    expect(calls.slice(coldCalls)).toEqual(["getSignaturesForAddress", "getTokenSupply"]);
   });
 
   test("every new build is handed to background, so a serverless host keeps it running", async () => {
@@ -346,6 +367,13 @@ describe("API", () => {
 
     const b = createApi({ rpc: (await fixtureRpc()).rpc, fetcher, cache, index });
     expect((await b.mint(MINT_6872)).status).toBe(200);
+  });
+
+  test("GET /api/stats counts the index", async () => {
+    const body = await (await api()).stats().json();
+    // #6872 live, #7 on two mints (a duplicate), every other number up to #6872 missing.
+    expect(body).toMatchObject({ numbers: 6872, live: 1, burned: 0, generatedAt: "2026-10-20T00:00:00.000Z" });
+    expect((body as { missing: number[] }).missing).toHaveLength(6870);
   });
 
   test("GET /api/random picks a number from the index", async () => {

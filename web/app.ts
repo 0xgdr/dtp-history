@@ -3,6 +3,7 @@
 import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
 import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
+import type { Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
@@ -174,6 +175,109 @@ function renderWelcome(): HTMLElement {
       "Enter a Degen Trash Panda number to compare its art & six traits today with the day it was minted.",
     ),
     h("p", {}, "Try ", lookupLink("15700", "#15700"), " or ", randomLink(), "."),
+    renderStory(),
+  );
+}
+
+// The collection's own history, as read from the chain while building this. The live counts come
+// from /api/stats; the story's own numbers are history and don't change.
+const STORY: { when: string; title: string; text: string; examples: string[]; tone?: "exalted" | "immortal" | "burned" }[] = [
+  {
+    when: "22 Nov 2021",
+    title: "The drop",
+    text: "A Candy Machine loaded with 20,000 Pandas starts minting on the evening of 22 November (UTC). It mints 14,173 of them, then stops.",
+    examples: ["6872"],
+  },
+  {
+    when: "Nov 2021",
+    title: "Exalted",
+    text: "Days after mint, some early Pandas are exalted. The update that adds the exalted attribute changes their background art too.",
+    examples: ["55", "118"],
+    tone: "exalted",
+  },
+  {
+    when: "Jan 2022",
+    title: "A second creator",
+    text: "Minting carries on under a second creator address. About 3,400 more Pandas join the collection this way.",
+    examples: ["13400"],
+  },
+  {
+    when: "20 Apr 2022",
+    title: "The collection is verified",
+    text: "Pandas are verified into the Degenerate Trash Pandas collection on chain. Some get the same verification again and again over the following months.",
+    examples: ["6872", "13400"],
+  },
+  {
+    when: "Jan 2023",
+    title: "Lost metadata",
+    text: "Some Pandas' metadata moves to GenesysGo Shadow Drive. Those files are gone now, so part of their history can't be read.",
+    examples: ["14332"],
+  },
+  {
+    when: "27–28 Jun 2023",
+    title: "The Immortals",
+    text: "2,395 Pandas are minted into the numbers the drop never reached, in a collection of their own: Immortal Degenerate Trash Pandas.",
+    examples: ["14162", "15000"],
+    tone: "immortal",
+  },
+  {
+    when: "26 Jan 2024",
+    title: "#5642 switches collection",
+    text: "An original from November 2021 is unverified from the main collection and put in the Immortal collection, unverified.",
+    examples: ["5642"],
+    tone: "immortal",
+  },
+  {
+    when: "2022–2026",
+    title: "Burned",
+    text: "Pandas get burned now and then. Some owners burned just the token, which leaves the metadata behind and hides the Panda from most indexers.",
+    examples: ["13868", "8669"],
+    tone: "burned",
+  },
+];
+
+function renderStory(): HTMLElement {
+  const tiles = { numbers: "numbers", live: "live", burned: "burned", missing: "never found" } as const;
+  const values = Object.fromEntries(Object.keys(tiles).map((k) => [k, h("dd", {}, "–")])) as Record<keyof typeof tiles, HTMLElement>;
+  const foot = h("p", { class: "story-foot" });
+  void fetch("/api/stats")
+    .then((res) => (res.ok ? (res.json() as Promise<Stats>) : null))
+    .then((stats) => {
+      if (!stats) return;
+      const fmt = (n: number) => n.toLocaleString("en-GB");
+      values.numbers.textContent = fmt(stats.numbers);
+      values.live.textContent = fmt(stats.live);
+      values.burned.textContent = fmt(stats.burned);
+      values.missing.textContent = fmt(stats.missing.length);
+      const built = longDate(Date.parse(stats.generatedAt) / 1000);
+      const missing = stats.missing.map((n) => `#${n}`);
+      foot.textContent = `${missing.length ? `No one has found a Panda for ${listJoin(missing)}. ` : ""}Counts from the index built on ${built}.`;
+    })
+    .catch(() => {});
+  return h(
+    "section",
+    { class: "story", "aria-labelledby": "story-title" },
+    h("h2", { id: "story-title" }, "The collection, from the chain"),
+    h(
+      "dl",
+      { class: "stats" },
+      ...Object.entries(tiles).map(([k, label]) => h("div", { class: "stat" }, h("dt", {}, label), values[k as keyof typeof tiles])),
+    ),
+    h(
+      "ol",
+      { class: "story-list" },
+      ...STORY.map((e) =>
+        h(
+          "li",
+          { class: `story-item${e.tone ? ` ${e.tone}` : ""}` },
+          h("p", { class: "story-when" }, e.when),
+          h("h3", {}, e.title),
+          h("p", {}, e.text),
+          h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
+        ),
+      ),
+    ),
+    foot,
   );
 }
 
@@ -270,13 +374,9 @@ function renderHero(r: HistoryResult): HTMLElement {
 
   const notes: string[] = [];
   if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
-  if (r.burned) notes.push("This Panda has been burned: its metadata account no longer exists.");
   const immortal = r.series === "Immortal";
-  for (const w of r.warnings) {
-    if (r.verdict === "Unknown" && w === r.warnings[0]) continue;
-    if (r.burned && w.startsWith("metadata account does not exist")) continue; // said above
-    notes.push(sentence(w));
-  }
+  // A burned Panda's warning says how it was burned (see src/history.ts).
+  for (const w of r.warnings) if (!(r.verdict === "Unknown" && w === r.warnings[0])) notes.push(sentence(w));
 
   return h(
     "section",
