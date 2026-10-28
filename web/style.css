@@ -251,21 +251,20 @@ main {
 
 .story-year {
   position: relative;
-  margin: 12px 0 14px calc(-1 * var(--rail));
+  margin: 20px 0 10px calc(-1 * var(--rail));
 }
 
+/* Set like a card title, in sticker yellow, with paper behind it so the rail breaks around it. */
 .story-year span {
   display: inline-block;
-  padding: 0 12px 0 0;
-  color: transparent;
+  padding: 4px 10px 4px 0;
+  color: var(--sticker);
   background: var(--paper);
-  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-size: 1.375rem;
   font-weight: 900;
-  font-variation-settings: "wdth" 125;
+  font-variation-settings: "wdth" 112;
   font-feature-settings: "tnum";
-  letter-spacing: -0.02em;
-  line-height: 1;
-  -webkit-text-stroke: 1.5px color-mix(in srgb, var(--ink) 55%, transparent);
+  line-height: 1.2;
 }
 
 .story-item {
@@ -1070,7 +1069,8 @@ pre {
     font-size: 0.6875rem;
   }
 
-  .story-item h3 {
+  .story-item h3,
+  .story-year span {
     font-size: 1.125rem;
   }
 
