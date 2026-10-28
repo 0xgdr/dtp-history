@@ -352,23 +352,12 @@ main {
   padding: 18px 22px 18px 18px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
   border-radius: var(--radius);
 }
 
 .story-art {
   position: relative;
   margin: 0;
-}
-
-.story-art a {
-  display: block;
-  border-radius: var(--radius);
-  transition: transform 160ms ease;
-}
-
-.story-art a:hover {
-  transform: rotate(-2deg) scale(1.03);
 }
 
 .story-item.burned .story-img .thumb-img {
