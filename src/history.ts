@@ -18,6 +18,10 @@ export type BuildProgress = { phase: "signatures" | "transactions" | "metadata";
 
 export type Deps = {
   rpc: Rpc;
+  // Asked for a transaction `rpc` returns without its inner instructions. Helius's archived copy
+  // of some early-2022 transactions has none (e.g. #14381's Candy Machine v2 mint), which hides the
+  // Create inside them; Solana's public RPC has them.
+  archiveRpc?: Rpc;
   fetcher: Fetcher;
   cache: Cache;
   now?: () => Date;
@@ -90,7 +94,7 @@ export type HistoryResult = {
 
 // Bump when the shape or meaning of HistoryResult changes, so cached histories are rebuilt
 // (cheaply: transactions and JSON stay cached) instead of being served with stale verdicts.
-const HISTORY_VERSION = 5;
+const HISTORY_VERSION = 6;
 
 type CachedHistory = { version?: number; newestSig: string; signatures: SigInfo[]; result: HistoryResult };
 
@@ -138,7 +142,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   report({ phase: "transactions", done: 0, total: ordered.length });
   const txs = await Promise.all(
     ordered.map(async (s) => {
-      const tx = await getTransaction(rpc, cache, s.signature);
+      const tx = await getTransaction(rpc, cache, s.signature, deps.archiveRpc);
       if (!tx) unavailable.push(s.signature);
       report({ phase: "transactions", done: ++fetched, total: ordered.length });
       return tx;
@@ -377,15 +381,25 @@ async function fetchSignatures(
   }
 }
 
-async function getTransaction(rpc: Rpc, cache: Deps["cache"], sig: string): Promise<RawTransaction | null> {
-  const cached = await cache.get<RawTransaction>("tx", sig);
-  if (cached) return cached;
+async function getTransaction(rpc: Rpc, cache: Deps["cache"], sig: string, archiveRpc?: Rpc): Promise<RawTransaction | null> {
   const params = [sig, { encoding: "json", maxSupportedTransactionVersion: 0, commitment: "finalized" }];
+  // A transaction with no inner instructions at all (not an empty list) is an incomplete copy.
+  const complete = (tx: RawTransaction) => tx.meta?.innerInstructions != null;
+  const fromArchive = async (tx: RawTransaction) => {
+    if (complete(tx) || !archiveRpc) return tx;
+    const full = await archiveRpc.call<RawTransaction | null>("getTransaction", params).catch(() => null);
+    if (!full || !complete(full)) return tx;
+    await cache.set("tx", sig, full);
+    return full;
+  };
+
+  const cached = await cache.get<RawTransaction>("tx", sig);
+  if (cached) return fromArchive(cached);
   for (let attempt = 0; attempt < 2; attempt++) {
     const tx = await rpc.call<RawTransaction | null>("getTransaction", params);
     if (tx) {
       await cache.set("tx", sig, tx);
-      return tx;
+      return fromArchive(tx);
     }
   }
   return null;

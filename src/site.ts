@@ -25,6 +25,9 @@ console.log(config.cacheBucket ? `Cache: bucket ${config.cacheBucket}/${config.c
 
 const api = createApi({
   rpc: createRpc(config.rpcUrl, { rps: config.rpcRps, concurrency: config.rpcConcurrency }),
+  // For transactions Helius returns without inner instructions (see Deps.archiveRpc). Rarely
+  // needed, and the public RPC rate-limits hard, so it gets a low rate of its own.
+  archiveRpc: createRpc("https://api.mainnet-beta.solana.com", { rps: 2, concurrency: 1 }),
   fetcher: createFetcher(cache),
   cache,
   index: pandaIndexJson as PandaIndex,

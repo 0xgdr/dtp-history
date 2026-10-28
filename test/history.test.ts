@@ -32,11 +32,14 @@ function emptyTx(info: SigInfo): RawTransaction {
       signatures: [info.signature],
       message: { accountKeys: [], header: { numRequiredSignatures: 0 }, instructions: [] },
     },
-    meta: { err: null },
+    // Like a real transaction: no inner instructions is an empty list, not a missing one.
+    meta: { err: null, innerInstructions: [] },
   };
 }
 
-async function fixtureRpc(overrides: { signatures?: SigInfo[]; account?: unknown; dropTx?: string; supply?: string } = {}) {
+async function fixtureRpc(
+  overrides: { signatures?: SigInfo[]; account?: unknown; dropTx?: string; supply?: string; stripInner?: string } = {},
+) {
   const signatures = overrides.signatures ?? (await fixture<SigInfo[]>("signatures.json"));
   const account = overrides.account ?? (await fixture("account.json"));
   const txs = await loadTxs();
@@ -53,7 +56,10 @@ async function fixtureRpc(overrides: { signatures?: SigInfo[]; account?: unknown
       if (method === "getTransaction") {
         if (first === overrides.dropTx) return null as T;
         const info = signatures.find((s) => s.signature === first)!;
-        return (txs.get(first) ?? emptyTx(info)) as T;
+        const tx = txs.get(first) ?? emptyTx(info);
+        // Like Helius's copy of some early-2022 transactions: no inner instructions, no logs.
+        if (first === overrides.stripInner) return { ...tx, meta: { ...tx.meta, innerInstructions: undefined, logMessages: undefined } } as T;
+        return tx as T;
       }
       if (method === "getAccountInfo") return account as T;
       if (method === "getTokenSupply") {
@@ -170,6 +176,35 @@ describe("#6872 full pipeline", () => {
     expect(result.baselineUncertain).toBe(true);
     expect(result.unavailableSignatures).toEqual([create.transaction.signatures[0]!]);
     expect(await cache.get("history", MINT_6872)).toBeNull();
+  });
+
+  test("a mint tx returned without inner instructions is fetched again from the archive RPC", async () => {
+    const create = (await loadTxs()).values().find((t) => t.blockTime === 1637695176)!;
+    const sig = create.transaction.signatures[0]!;
+    const cache = memoryCache();
+    const fetcher = await fixtureFetcher();
+
+    // Without an archive the Create (inside the candy machine's instruction) can't be seen.
+    const blind = await buildHistory(MINT_6872, { rpc: (await fixtureRpc({ stripInner: sig })).rpc, fetcher, cache });
+    expect(blind.baselineUncertain).toBe(true);
+
+    // With one, even the incomplete copy already in the cache is replaced.
+    const archive = await fixtureRpc();
+    const seen = await buildHistory(MINT_6872, {
+      rpc: (await fixtureRpc({ stripInner: sig })).rpc,
+      archiveRpc: archive.rpc,
+      fetcher,
+      cache: { ...cache, get: async (ns, key) => (ns === "history" ? null : cache.get(ns, key)) },
+    });
+    expect(seen.baselineUncertain).toBe(false);
+    expect(seen.steps[0]!.kind).toBe("CreateMetadataAccount");
+    expect(archive.calls).toEqual(["getTransaction"]);
+  });
+
+  test("a complete transaction never goes to the archive RPC", async () => {
+    const archive = await fixtureRpc();
+    await buildHistory(MINT_6872, { rpc: (await fixtureRpc()).rpc, archiveRpc: archive.rpc, fetcher: await fixtureFetcher(), cache: memoryCache() });
+    expect(archive.calls).toEqual([]);
   });
 
   test("a missing account means burned", async () => {
