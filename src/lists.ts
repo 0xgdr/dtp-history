@@ -20,6 +20,8 @@ export type ListEntry = {
   stat?: string;
   // For an unverified or lost Panda, what's wrong (e.g. "In the Immortal collection, unverified").
   note?: string;
+  // When `image` is on Shadow Drive (gone): the last art its history can still read, and when.
+  lastArt?: { image: string; at: string };
 };
 
 export type PandaLists = { generatedAt: string } & Record<ListKind, ListEntry[]>;
