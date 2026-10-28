@@ -6,6 +6,7 @@ import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/e
 import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import { LOST_HOST, type ListEntry, type ListKind } from "../src/lists.ts";
+import { thumbSourceOk } from "../src/thumb-source.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -353,7 +354,7 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
       h(
         "figure",
         { class: "story-art" },
-        lookupLink(e.art.n, thumb(e.art.image, name, "story-img"), { "aria-label": name }),
+        lookupLink(e.art.n, thumb(thumbUrl(e.art.image), name, "story-img"), { "aria-label": name }),
         h("span", { class: "story-stamp", "aria-hidden": "true" }, e.stamp),
       ),
       h(
@@ -468,7 +469,7 @@ function renderGridPanda(p: ListEntry): HTMLElement {
       h(
         "span",
         { class: "grid-card" },
-        lost ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive") : thumb(p.image, name, "grid-img"),
+        lost ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive") : thumb(thumbUrl(p.image), name, "grid-img"),
         p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
         h("span", { class: "grid-n" }, `#${p.n}`),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
@@ -1048,8 +1049,13 @@ function safeLink(url: string, text: string): Child {
 
 // The frame holds the grey placeholder and a loading spinner (CSS, shown only if loading is
 // slow); the image fades in over it once it has loaded.
+// Our own small copy of an Arweave/ArDrive image (src/thumb.ts), for tiles; anything else as is.
+function thumbUrl(src: string | null): string | null {
+  return src && thumbSourceOk(src) ? `/thumb?src=${encodeURIComponent(src)}` : src;
+}
+
 function thumb(url: string | null, alt: string, cls = ""): HTMLElement {
-  if (!url || !isHttp(url)) return h("div", { class: `thumb empty ${cls}` }, "No image");
+  if (!url || !(isHttp(url) || url.startsWith("/thumb?"))) return h("div", { class: `thumb empty ${cls}` }, "No image");
   const img = h("img", { class: "thumb-img", alt, loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
   const frame = h("div", { class: `thumb loading ${cls}` }, img);
   img.addEventListener("load", () => {
