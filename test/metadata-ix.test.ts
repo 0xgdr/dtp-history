@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { address, getAddressEncoder } from "@solana/kit";
-import { TOKEN_METADATA_PROGRAM_ID } from "../src/constants.ts";
+import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TOKEN_METADATA_PROGRAM_ID } from "../src/constants.ts";
 import { decodeMetadataAccount } from "../src/decode/metadata-account.ts";
 import { decodeMetadataEvents, type MetadataEvent } from "../src/decode/metadata-ix.ts";
 import { BorshWriter, PDA_6872, fixture, flatTx, syntheticTx } from "./helpers.ts";
@@ -22,7 +22,7 @@ describe("#6872 fixtures", () => {
     const list = await events("20211123-4XXQoh4g");
     expect(list.map((e) => [e.ixPath, e.kind])).toEqual([
       ["5.2", "CreateMetadataAccount"],
-      ["5.6", "Other(10)"],
+      ["5.6", "CreateMasterEdition"],
       ["5.12", "UpdateMetadataAccount"],
     ]);
     const create = list[0]!;
@@ -48,6 +48,12 @@ describe("#6872 fixtures", () => {
       expect(e.authority).toBe(TRSH);
       expect(e.data?.uri).toStartWith("https://arweave.net/HK4b1FL5");
     }
+  });
+
+  test("2022-04-20 joins the verified collection", async () => {
+    const e = (await events("20220420-5HjXjGKP")).find((x) => x.collectionChange);
+    expect(e?.kind).toBe("SetAndVerifyCollection");
+    expect(e?.collectionChange).toEqual({ verified: true, key: DTP_COLLECTION_MINT });
   });
 
   test("2026-10-12 moves to ardrive and changes creators", async () => {
@@ -123,6 +129,57 @@ describe("synthetic instructions", () => {
     });
     expect(e?.updateAuthority).toBe(authority);
     expect(e?.isMutable).toBe(false);
+  });
+
+  const pubkey = (a: string) => new Uint8Array(getAddressEncoder().encode(address(a)));
+  // Update = [authority, delegateRecord, token, mint, metadata, ...]
+  const updateAccounts = [authority, TOKEN_METADATA_PROGRAM_ID, TOKEN_METADATA_PROGRAM_ID, authority, PDA_6872];
+  // Verify/Unverify = [authority, delegateRecord, metadata, collectionMint, ...]
+  const verifyAccounts = [authority, TOKEN_METADATA_PROGRAM_ID, PDA_6872, DTP_IMMORTAL_COLLECTION_MINT];
+
+  test("Update V1 that sets the collection, unverified (like #5642 on 2024-01-26)", () => {
+    const data = new BorshWriter()
+      .u8(50)
+      .u8(0) // V1
+      .u8(0) // new_update_authority: None
+      .u8(0) // data: None
+      .u8(0) // primary_sale_happened: None
+      .u8(0) // is_mutable: None
+      .u8(2) // collection: Set
+      .u8(0)
+      .bytes(pubkey(DTP_IMMORTAL_COLLECTION_MINT))
+      .u8(0) // the rest is left unread
+      .build();
+    const [e] = decodeMetadataEvents(syntheticTx(TOKEN_METADATA_PROGRAM_ID, updateAccounts, data), PDA_6872);
+    expect(e?.kind).toBe("Update");
+    expect(e?.collection).toEqual({ verified: false, key: DTP_IMMORTAL_COLLECTION_MINT });
+  });
+
+  test("Update V1 with no collection toggle still decodes, leaving the collection alone", () => {
+    const data = new BorshWriter().u8(50).u8(0).u8(0).u8(0).u8(0).u8(1).u8(1).build();
+    const [e] = decodeMetadataEvents(syntheticTx(TOKEN_METADATA_PROGRAM_ID, updateAccounts, data), PDA_6872);
+    expect(e?.kind).toBe("Update");
+    expect(e?.isMutable).toBe(true);
+    expect(e?.collection).toBeUndefined();
+  });
+
+  test("Verify and Unverify of a collection record the collection", () => {
+    const verify = decodeMetadataEvents(syntheticTx(TOKEN_METADATA_PROGRAM_ID, verifyAccounts, new Uint8Array([52, 1])), PDA_6872);
+    expect(verify[0]).toMatchObject({
+      kind: "Verify(CollectionV1)",
+      collectionChange: { verified: true, key: DTP_IMMORTAL_COLLECTION_MINT },
+    });
+    const unverify = decodeMetadataEvents(syntheticTx(TOKEN_METADATA_PROGRAM_ID, verifyAccounts, new Uint8Array([53, 1])), PDA_6872);
+    expect(unverify[0]).toMatchObject({
+      kind: "Unverify(CollectionV1)",
+      collectionChange: { verified: false, key: DTP_IMMORTAL_COLLECTION_MINT },
+    });
+  });
+
+  test("Verify of a creator is named but changes no collection", () => {
+    const [e] = decodeMetadataEvents(syntheticTx(TOKEN_METADATA_PROGRAM_ID, verifyAccounts, new Uint8Array([52, 0])), PDA_6872);
+    expect(e?.kind).toBe("Verify(CreatorV1)");
+    expect(e?.collectionChange).toBeUndefined();
   });
 
   test("garbage data gives Undecodable without throwing", () => {

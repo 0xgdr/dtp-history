@@ -1,9 +1,9 @@
 // Type-only imports are erased by Bun's bundler, so the page shares the API's types for free.
 // traits.ts is tiny and dependency-free, so the page reuses the server's trait matching.
-import { TRAITS } from "../src/constants.ts";
+import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
 import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
-import type { HistoryResult, Step } from "../src/history.ts";
+import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -271,28 +271,55 @@ function renderHero(r: HistoryResult): HTMLElement {
   const notes: string[] = [];
   if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
   if (r.burned) notes.push("This Panda has been burned: its metadata account no longer exists.");
-  for (const w of r.warnings) if (!(r.verdict === "Unknown" && w === r.warnings[0])) notes.push(sentence(w));
+  const immortal = r.series === "Immortal";
+  for (const w of r.warnings) {
+    if (r.verdict === "Unknown" && w === r.warnings[0]) continue;
+    if (r.burned && w.startsWith("metadata account does not exist")) continue; // said above
+    notes.push(sentence(w));
+  }
 
   return h(
     "section",
     { class: `hero ${stamp.cls}` },
     h(
       "figure",
-      { class: "hero-art" },
+      { class: `hero-art${r.burned ? " burned" : ""}` },
       thumb(r.current.image, r.number !== null ? `Degen Trash Panda #${r.number}` : "This Panda's current art", "hero-img"),
       h("span", { class: `stamp ${stamp.cls}`, "aria-hidden": "true" }, stamp.text),
     ),
     h(
       "div",
       { class: "hero-text" },
-      h("p", { class: "collection" }, "Degen Trash Panda"),
+      h("p", { class: "collection" }, immortal ? "Immortal Degen Trash Panda" : "Degen Trash Panda"),
       h("h1", { class: "number" }, r.number !== null ? `#${r.number}` : "No number"),
+      renderBadges(r, mintDate),
       h("p", { class: `headline ${stamp.cls}` }, headline),
       h("p", { class: "detail" }, detail),
       notes.length ? h("ul", { class: "notes" }, ...notes.map((n) => h("li", {}, n))) : "",
       renderTraits(r),
       h("p", { class: "links" }, "Mint ", solscan("token", r.mint)),
     ),
+  );
+}
+
+// Which mint it came from, and whether it's been burned.
+function renderBadges(r: HistoryResult, mintDate: string): HTMLElement {
+  const immortal = r.series === "Immortal";
+  const series = immortal ? "Immortal" : "Original drop";
+  return h(
+    "p",
+    { class: "badges" },
+    h(
+      "span",
+      {
+        class: `badge${immortal ? " immortal" : ""}`,
+        title: immortal
+          ? "Minted in June 2023 into the numbers the original drop left unminted, in the Immortal Degenerate Trash Pandas collection"
+          : "Minted in the original Degenerate Trash Pandas drop",
+      },
+      mintDate ? `${series} · minted ${mintDate}` : series,
+    ),
+    r.burned ? h("span", { class: "badge burned" }, "Burned") : "",
   );
 }
 
@@ -379,7 +406,7 @@ function renderCompare(r: HistoryResult): HTMLElement {
 function renderTimeline(r: HistoryResult): HTMLElement {
   const swapSteps = r.steps.filter(hasSwap).length;
   const names = exaltedNames(r.steps.map((s) => s.json));
-  const list = h("ol", { class: "timeline" }, ...r.steps.map((step) => renderStep(step, names)));
+  const list = h("ol", { class: "timeline" }, ...timelineItems(r).map((item) => ("kind" in item ? renderStep(item, names) : renderCollectionEvents(item))));
   const empty = h("p", { class: "empty" }, "No update ever touched the art or the six traits.");
 
   // On by default: the full history is one click away.
@@ -404,6 +431,53 @@ function renderTimeline(r: HistoryResult): HTMLElement {
     h("p", { class: "history-sub" }, historySummary(r.steps.length - 1, swapSteps)),
     empty,
     list,
+  );
+}
+
+// Steps and collection events in time order. A collection event follows the step from the same
+// transaction; the account's current state (no time) stays last.
+function timelineItems(r: HistoryResult): (Step | CollectionEvent[])[] {
+  const groups = new Map<string, CollectionEvent[]>();
+  for (const e of r.collectionEvents) groups.set(e.sig, [...(groups.get(e.sig) ?? []), e]);
+  const items: { at: number; order: number; item: Step | CollectionEvent[] }[] = [
+    ...r.steps.map((step) => ({ at: step.blockTime ?? Infinity, order: 0, item: step })),
+    ...[...groups.values()].map((events) => ({ at: events[0]!.blockTime ?? Infinity, order: 1, item: events })),
+  ];
+  return items.sort((a, b) => a.at - b.at || a.order - b.order).map((x) => x.item);
+}
+
+const COLLECTION_NAMES: Record<string, string> = {
+  [DTP_COLLECTION_MINT]: "the Degenerate Trash Pandas collection",
+  [DTP_IMMORTAL_COLLECTION_MINT]: "the Immortal collection",
+};
+
+// One transaction's collection changes, e.g. "Unverified from the Degenerate Trash Pandas
+// collection, then put in the Immortal collection, unverified".
+function renderCollectionEvents(events: CollectionEvent[]): HTMLElement {
+  // Setting a collection and verifying it in the same transaction is one move.
+  const shown = events.filter(
+    (e, i) => !(e.action === "set" && events.slice(i + 1).some((x) => x.action === "verified" && x.collection === e.collection)),
+  );
+  const name = (key: string | null) => (key ? (COLLECTION_NAMES[key] ?? `collection ${key.slice(0, 4)}…${key.slice(-4)}`) : "");
+  const phrase = (e: CollectionEvent) =>
+    ({
+      verified: `verified into ${name(e.collection)}`,
+      unverified: `unverified from ${name(e.collection)}`,
+      set: `put in ${name(e.collection)}, unverified`,
+      cleared: "taken out of its collection",
+    })[e.action];
+  const first = events[0]!;
+  const immortal = events.some((e) => e.collection === DTP_IMMORTAL_COLLECTION_MINT);
+  return h(
+    "li",
+    { class: `step collection-event${immortal ? " immortal" : ""}` },
+    h(
+      "div",
+      { class: "event-row" },
+      h("time", { title: first.dateUtc ? `${first.dateUtc} UTC` : "" }, shortDate(first.blockTime)),
+      h("span", { class: "step-title" }, "Collection"),
+      h("span", { class: "step-summary" }, capitalise(shown.map(phrase).join(", then ")), " ", solscan("tx", first.sig)),
+    ),
   );
 }
 

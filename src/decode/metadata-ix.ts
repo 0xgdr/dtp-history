@@ -26,6 +26,8 @@ export type MetadataEvent = {
   primarySaleHappened?: boolean;
   isMutable?: boolean;
   collection?: Collection | null;
+  // Set for the collection instructions below: the collection this Panda is in afterwards.
+  collectionChange?: Collection;
   // Set for kind "Undecodable": the raw instruction data, so nothing is lost.
   hex?: string;
   error?: string;
@@ -96,6 +98,32 @@ const LAYOUTS: Record<number, Layout> = {
   },
 };
 
+// Instructions that verify or unverify a collection, by discriminant. Account positions follow the
+// mpl-token-metadata IDL. Verify (52) and Unverify (53) also cover creators: their first arg byte
+// is 0 for CreatorV1, 1 for CollectionV1.
+const COLLECTION_IXS: Record<number, { kind: string; metadataIdx: number; collectionIdx: number; verified: boolean }> = {
+  18: { kind: "VerifyCollection", metadataIdx: 0, collectionIdx: 3, verified: true },
+  22: { kind: "UnverifyCollection", metadataIdx: 0, collectionIdx: 2, verified: false },
+  25: { kind: "SetAndVerifyCollection", metadataIdx: 0, collectionIdx: 4, verified: true },
+  30: { kind: "VerifySizedCollectionItem", metadataIdx: 0, collectionIdx: 3, verified: true },
+  31: { kind: "UnverifySizedCollectionItem", metadataIdx: 0, collectionIdx: 3, verified: false },
+  32: { kind: "SetAndVerifySizedCollectionItem", metadataIdx: 0, collectionIdx: 4, verified: true },
+  52: { kind: "Verify(CollectionV1)", metadataIdx: 2, collectionIdx: 3, verified: true },
+  53: { kind: "Unverify(CollectionV1)", metadataIdx: 2, collectionIdx: 3, verified: false },
+};
+
+// Other instructions seen on Pandas, named so the page needn't show a bare number.
+const OTHER_NAMES: Record<number, string> = {
+  10: "CreateMasterEdition",
+  17: "CreateMasterEditionV3",
+  29: "BurnNft",
+  41: "Burn",
+  52: "Verify(CreatorV1)",
+  53: "Unverify(CreatorV1)",
+  54: "Collect",
+  56: "Resize",
+};
+
 // Decode every Token Metadata instruction in the tx that acts on `metadataPda`.
 // Known state-changing instructions count only when the PDA sits in their metadata slot, so
 // batch txs that touch many Pandas yield only this Panda's event.
@@ -127,7 +155,13 @@ export function decodeInstruction(
   if (!layout) {
     if (!ix.accounts.includes(metadataPda)) return null;
     if (disc === undefined) return { ...base, kind: "Undecodable", authority: null, hex: "", error: "empty data" };
-    return { ...base, kind: `Other(${disc})`, authority: null };
+    const collectionIx = COLLECTION_IXS[disc];
+    const isCollection = collectionIx && (disc < 52 || ix.data[1] === 1);
+    if (isCollection && ix.accounts[collectionIx.metadataIdx] === metadataPda) {
+      const key = ix.accounts[collectionIx.collectionIdx];
+      if (key) return { ...base, kind: collectionIx.kind, authority: null, collectionChange: { verified: collectionIx.verified, key } };
+    }
+    return { ...base, kind: OTHER_NAMES[disc] ?? `Other(${disc})`, authority: null };
   }
 
   if (ix.accounts[layout.metadataIdx] !== metadataPda) return null;
@@ -171,9 +205,10 @@ export function readCollection(r: BorshReader): Collection {
   return { verified: r.bool(), key: r.pubkey() };
 }
 
-// UpdateArgs is an enum. V1 (0) and AsUpdateAuthorityV2 (1) share the same leading fields;
-// AsAuthorityItemDelegateV2 (2) has no data; the data delegates (4, 6) carry only data.
-// Everything after is_mutable (toggles, rule set, auth data) is left unread.
+// UpdateArgs is an enum. V1 (0) and AsUpdateAuthorityV2 (1) share the same leading fields, then a
+// collection toggle; AsAuthorityItemDelegateV2 (2) has no data; the collection delegates (3, 7)
+// start with the toggle; the data delegates (4, 6) carry only data. Everything after the toggle
+// (other toggles, rule set, auth data) is left unread.
 function readUpdateArgs(r: BorshReader): Partial<MetadataEvent> {
   const variant = r.u8();
   switch (variant) {
@@ -185,6 +220,7 @@ function readUpdateArgs(r: BorshReader): Partial<MetadataEvent> {
         data: r.option(readData) ?? undefined,
         primarySaleHappened: r.option((x) => x.bool()) ?? undefined,
         isMutable: r.option((x) => x.bool()) ?? undefined,
+        collection: readCollectionToggle(r),
       });
     case 2:
       return defined({
@@ -192,6 +228,12 @@ function readUpdateArgs(r: BorshReader): Partial<MetadataEvent> {
         updateAuthority: r.option((x) => x.pubkey()) ?? undefined,
         primarySaleHappened: r.option((x) => x.bool()) ?? undefined,
         isMutable: r.option((x) => x.bool()) ?? undefined,
+      });
+    case 3:
+    case 7:
+      return defined({
+        kind: variant === 3 ? "Update(AsCollectionDelegateV2)" : "Update(AsCollectionItemDelegateV2)",
+        collection: readCollectionToggle(r),
       });
     case 4:
     case 6:
@@ -202,6 +244,20 @@ function readUpdateArgs(r: BorshReader): Partial<MetadataEvent> {
     default:
       return { kind: "Update(unparsed)" };
   }
+}
+
+// CollectionToggle: None (0) leaves it alone, Clear (1) removes it, Set (2) replaces it. It comes
+// after the fields the history depends on, so if it can't be read the update still counts, as one
+// that left the collection alone.
+function readCollectionToggle(r: BorshReader): Collection | null | undefined {
+  try {
+    const toggle = r.u8();
+    if (toggle === 1) return null;
+    if (toggle === 2) return readCollection(r);
+  } catch {
+    // fall through
+  }
+  return undefined;
 }
 
 function defined<T extends object>(obj: T): Partial<T> {

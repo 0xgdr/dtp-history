@@ -1,4 +1,4 @@
-import { DTP_COLLECTION_MINT, DTP_CREATORS } from "./constants.ts";
+import { DTP_COLLECTION_MINT, DTP_CREATORS, DTP_IMMORTAL_COLLECTION_MINT } from "./constants.ts";
 import type { Cache } from "./cache.ts";
 import { decodeMetadataAccount, type MetadataAccount } from "./decode/metadata-account.ts";
 import { decodeMetadataEvents, type MetadataEvent } from "./decode/metadata-ix.ts";
@@ -49,8 +49,23 @@ export type Step = {
   state: ChainState;
 };
 
+// A change to which collection the Panda is in: verified into one, unverified from one, or the
+// collection field set (always unverified) or cleared by an update.
+export type CollectionEvent = {
+  sig: string;
+  blockTime: number | null;
+  dateUtc: string | null;
+  action: "verified" | "unverified" | "set" | "cleared";
+  collection: string | null;
+};
+
+// The original drop (November 2021 onwards) or the Immortal Pandas (minted June 2023, in their own
+// collection).
+export type Series = "Original" | "Immortal";
+
 export type HistoryResult = {
   number: number | null;
+  series: Series;
   mint: string;
   metadataPda: string;
   burned: boolean;
@@ -66,6 +81,7 @@ export type HistoryResult = {
   original: { jsonUri: string | null; image: string | null };
   current: { jsonUri: string | null; image: string | null };
   steps: Step[];
+  collectionEvents: CollectionEvent[];
   otherMetadataIx: { sig: string; ixPath: string; kind: string; dateUtc: string | null; hex?: string }[];
   unavailableSignatures: string[];
   signaturesScanned: number;
@@ -74,7 +90,7 @@ export type HistoryResult = {
 
 // Bump when the shape or meaning of HistoryResult changes, so cached histories are rebuilt
 // (cheaply: transactions and JSON stay cached) instead of being served with stale verdicts.
-const HISTORY_VERSION = 3;
+const HISTORY_VERSION = 4;
 
 type CachedHistory = { version?: number; newestSig: string; signatures: SigInfo[]; result: HistoryResult };
 
@@ -132,7 +148,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     if (tx && tx.meta?.err == null) events.push(...decodeMetadataEvents(flattenTransaction(tx), pda));
   }
   const stateEvents = events.filter((e) => STATE_KINDS.test(e.kind));
-  const otherEvents = events.filter((e) => !STATE_KINDS.test(e.kind));
+  const otherEvents = events.filter((e) => !STATE_KINDS.test(e.kind) && !e.collectionChange);
 
   // 4. Current account state.
   const accountInfo = await rpc.call<{ value: { data: [string, string] } | null }>("getAccountInfo", [
@@ -154,9 +170,28 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   const baselineUncertain = !stateEvents.some((e) => e.kind.startsWith("Create"));
   let historyIncomplete = unavailable.length > 0;
   const folded: { event: MetadataEvent | null; state: ChainState }[] = [];
+  const collectionEvents: CollectionEvent[] = [];
+  const collectionEvent = (e: MetadataEvent, action: CollectionEvent["action"], collection: string | null) =>
+    collectionEvents.push({ sig: e.sig, blockTime: e.blockTime, dateUtc: dateUtc(e.blockTime), action, collection });
   let state = EMPTY_STATE;
-  for (const event of stateEvents) {
+  for (const event of events) {
+    // Verifying or unverifying a collection changes the state but isn't an update with metadata,
+    // so it isn't a step: the page shows it beside them.
+    // Re-running a verify on a Panda that is already verified (a sweep of the collection) changes
+    // nothing, so only a real change is recorded.
+    if (event.collectionChange) {
+      if (!Bun.deepEquals(state.collection, event.collectionChange)) {
+        state = { ...state, collection: event.collectionChange };
+        collectionEvent(event, event.collectionChange.verified ? "verified" : "unverified", event.collectionChange.key);
+      }
+      continue;
+    }
+    if (!STATE_KINDS.test(event.kind)) continue;
+    const before = state.collection;
     state = applyEvent(state, event);
+    if (event.collection !== undefined && !Bun.deepEquals(before, state.collection)) {
+      collectionEvent(event, state.collection ? "set" : "cleared", state.collection?.key ?? null);
+    }
     folded.push({ event, state });
   }
   if (baselineUncertain) {
@@ -196,6 +231,8 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     const json = fetched?.json ?? null;
     const prev = steps.at(-1);
     let diff = diffChain(prev?.state ?? null, s);
+    // A collection verified or unverified since the last step is a collection event, not this update.
+    if (event && event.collection === undefined) diff = diff.filter((c) => c.path !== "collection");
     let gapSince: number | null = null;
     if (json && lastReadable && lastReadable.uriKey !== uriKey) {
       const imageCheck = await compareImages(fetcher, imageOf(lastReadable.json), imageOf(json));
@@ -247,14 +284,19 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
 
   warnings.push(...result.warnings);
   if (burned) warnings.push("metadata account does not exist: the Panda is burned or closed");
-  if (account && (account.collection?.key !== DTP_COLLECTION_MINT || !account.collection.verified)) {
+  const verifiedIn = account?.collection?.verified ? account.collection.key : null;
+  if (account && verifiedIn !== DTP_COLLECTION_MINT && verifiedIn !== DTP_IMMORTAL_COLLECTION_MINT) {
     const byCreator = account.data.creators?.some((c) => c.verified && (DTP_CREATORS as readonly string[]).includes(c.address));
     warnings.push(
       byCreator
-        ? "collection field is not the verified DTP collection, but the DTP creator is verified"
+        ? "its collection isn't verified, but a DTP candy machine creator is"
         : "not a verified Degenerate Trash Panda (collection mismatch)",
     );
   }
+  // A burned Panda has no account, so go by its history too.
+  const immortal =
+    verifiedIn === DTP_IMMORTAL_COLLECTION_MINT ||
+    (burned && collectionEvents.some((e) => e.action === "verified" && e.collection === DTP_IMMORTAL_COLLECTION_MINT));
   if (baselineUncertain) warnings.push("no Create instruction found: the earliest decoded data is used as the baseline");
   if (historyIncomplete) warnings.push("history is incomplete: some transactions were unavailable or the account URI was not reached");
   const undecodable = otherEvents.filter((e) => e.kind === "Undecodable").length;
@@ -263,6 +305,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   const name = account?.data.name ?? last?.state.name ?? null;
   const history: HistoryResult = {
     number: pandaNumber(name),
+    series: immortal ? "Immortal" : "Original",
     mint,
     metadataPda: pda,
     burned,
@@ -277,6 +320,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     original: { jsonUri: first?.uri ?? null, image: first?.image ?? null },
     current: { jsonUri: last?.uri ?? null, image: last?.image ?? null },
     steps,
+    collectionEvents,
     otherMetadataIx: otherEvents.map((e) => ({
       sig: e.sig,
       ixPath: e.ixPath,
