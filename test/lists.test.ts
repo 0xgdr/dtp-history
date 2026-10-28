@@ -7,8 +7,8 @@ import { buildLists } from "../src/lists.ts";
 import type { Fetcher } from "../src/json-fetch.ts";
 import type { Rpc } from "../src/rpc.ts";
 
-type Options = { stat?: string; collection?: string; burnt?: boolean; image?: string };
-const panda = (id: string, n: number, { stat, collection = DTP_COLLECTION_MINT, burnt, image }: Options = {}): DasAsset => ({
+type Options = { stat?: string; collection?: string; burnt?: boolean; image?: string; jsonUri?: string };
+const panda = (id: string, n: number, { stat, collection = DTP_COLLECTION_MINT, burnt, image, jsonUri }: Options = {}): DasAsset => ({
   id,
   burnt,
   grouping: [{ group_key: "collection", group_value: collection }],
@@ -16,6 +16,7 @@ const panda = (id: string, n: number, { stat, collection = DTP_COLLECTION_MINT, 
   content: {
     metadata: { name: `Degen Trash Panda #${n}`, attributes: stat ? [{ trait_type: "EXALTED_STAT", value: stat }] : [] },
     links: { image: image ?? `https://arweave.net/${id}` },
+    json_uri: jsonUri ?? `https://arweave.net/${id}.json`,
   },
 });
 
@@ -31,9 +32,13 @@ const assets: DasAsset[] = [
   panda("m6", 6, { stat: "WEN: Never", image: "javascript:alert(1)" }),
   // Stripped of its stat, like #29: not exalted any more.
   panda("m8", 8, { stat: "EXALTED_STAT: None" }),
+  // Moved off the collection unverified, like #5642: DAS reports no grouping.
+  { ...panda("m9", 9), grouping: [] },
+  // Metadata still on Shadow Drive, like #15639.
+  panda("m10", 10, { image: "https://shdw-drive.genesysgo.net/x/10.png", jsonUri: "https://shdw-drive.genesysgo.net/x/10.json" }),
 ];
 const index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, "2026-10-28T00:00:00.000Z");
-const lists = buildLists(assets, index);
+const lists = buildLists(assets, index, new Map([["m9", DTP_IMMORTAL_COLLECTION_MINT]]));
 
 describe("buildLists", () => {
   test("exalted comes from the EXALTED_STAT trait, with its value, burned ones flagged", () => {
@@ -55,6 +60,16 @@ describe("buildLists", () => {
   test("an emptied stat (\"EXALTED_STAT: None\") is un-exalted, not exalted", () => {
     expect(lists.exalted.some((e) => e.n === 8)).toBe(false);
     expect(lists.unexalted.map((e) => e.n)).toEqual([8]);
+  });
+
+  test("unverified: in neither collection as verified, with where its metadata account points", () => {
+    expect(lists.unverified).toEqual([
+      { n: 9, mint: "m9", image: "https://arweave.net/m9", burned: false, note: "In the Immortal collection, unverified" },
+    ]);
+  });
+
+  test("lost: metadata or art still on Shadow Drive", () => {
+    expect(lists.lost.map((e) => [e.n, e.note])).toEqual([[10, "Metadata and art"]]);
   });
 
   test("a copycat is in no list, and a non-http image is dropped", () => {

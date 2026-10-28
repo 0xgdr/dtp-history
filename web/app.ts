@@ -5,7 +5,7 @@ import type { Change } from "../src/diff.ts";
 import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/exalted.ts";
 import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
-import type { ListEntry, ListKind } from "../src/lists.ts";
+import { LOST_HOST, type ListEntry, type ListKind } from "../src/lists.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -265,6 +265,7 @@ const STORY: StoryEntry[] = [
     text: "Some Pandas' metadata moves to GenesysGo Shadow Drive. Those files are gone now, so part of their history can't be read.",
     art: { n: "14332", image: "https://arweave.net/qeURwoChCJUGq6e8Cx11gv8s28-rddHp25S8fpcVL-w" },
     examples: ["14332"],
+    list: "lost",
   },
   {
     year: "2023",
@@ -282,10 +283,11 @@ const STORY: StoryEntry[] = [
     when: "26 Jan",
     title: "#5642 switches collection",
     stamp: "Moved",
-    text: "An original from November 2021 is unverified from the main collection and put in the Immortal collection, unverified.",
+    text: "An original from November 2021 is unverified from the main collection and put in the Immortal collection, unverified. #15639 went the same way three days earlier.",
     art: { n: "5642", image: "https://www.arweave.net/GVKXKVtIOS0rEn1w7lhw1gnpWB2hoWK7nwr_K-JC9D8?ext=png" },
-    examples: ["5642"],
+    examples: ["5642", "15639"],
     tone: "immortal",
+    list: "unverified",
   },
   {
     year: "Ever since",
@@ -388,6 +390,18 @@ const LISTS: { kind: ListKind; title: string; link: string; intro: string }[] = 
     intro: "Once exalted, now their exalted stat reads \u201cNone\u201d. Each had its traits swapped in late 2022, when its metadata was on Shadow Drive.",
   },
   {
+    kind: "unverified",
+    title: "Off the collection",
+    link: "See every Panda off the collection",
+    intro: "Pandas in neither collection as verified. Most were moved to the Immortal collection without being verified there; their DTP creator still proves they're genuine.",
+  },
+  {
+    kind: "lost",
+    title: "Still lost to Shadow Drive",
+    link: "See the Pandas still lost",
+    intro: "Pandas whose metadata or art still points at GenesysGo Shadow Drive, which is gone. Many more lost part of their history there and later moved off it; they aren't listed.",
+  },
+  {
     kind: "immortal",
     title: "The Immortals",
     link: "See all the Immortals",
@@ -443,9 +457,6 @@ async function loadList(list: (typeof LISTS)[number]): Promise<void> {
   }
 }
 
-// GenesysGo Shadow Drive is gone (docs/data-gaps.md), so art last hosted there can't load.
-const LOST_HOST = "shdw-drive.genesysgo.net";
-
 function renderGridPanda(p: ListEntry): HTMLElement {
   const name = `Degen Trash Panda #${p.n}`;
   const lost = p.image !== null && hostOf(p.image) === LOST_HOST;
@@ -461,6 +472,7 @@ function renderGridPanda(p: ListEntry): HTMLElement {
         p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
         h("span", { class: "grid-n" }, `#${p.n}`),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
+        p.note ? h("span", { class: "grid-stat" }, p.note) : "",
       ),
       { "aria-label": `${name}${p.burned ? ", burned" : ""}` },
     ),
