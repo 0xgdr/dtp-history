@@ -201,7 +201,7 @@ main {
   border-radius: 999px;
   font-weight: 800;
   text-decoration: none;
-  transition: transform 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .try-pill.outline {
@@ -210,7 +210,13 @@ main {
 }
 
 .try-pill:hover {
-  transform: translateY(-2px) rotate(-1.5deg);
+  background: color-mix(in srgb, var(--sticker) 82%, white);
+  border-color: color-mix(in srgb, var(--sticker) 82%, white);
+}
+
+.try-pill.outline:hover {
+  background: color-mix(in srgb, var(--sticker) 14%, transparent);
+  border-color: var(--sticker);
 }
 
 .try-pill:active {
