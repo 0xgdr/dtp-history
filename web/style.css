@@ -178,8 +178,144 @@ main {
 
 /* Welcome, loading, errors */
 
-.welcome {
+.welcome > h1,
+.welcome > p {
   max-width: 34em;
+}
+
+/* The collection's history on the home page: a stat strip, then a timeline down a bin-black rail. */
+
+.story {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 2px solid var(--ink);
+}
+
+.story h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.1;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 32px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  padding: 14px 16px;
+  background: var(--card);
+  border-radius: var(--radius);
+}
+
+.stat dd {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  font-feature-settings: "tnum";
+  line-height: 1.1;
+}
+
+.stat dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.story-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.story-item {
+  --accent: var(--ink);
+  position: relative;
+  display: grid;
+  grid-template-columns: 9.5em minmax(0, 1fr);
+  column-gap: 28px;
+  padding: 0 0 28px;
+}
+
+/* The rail and its dot, between the date and the text. */
+.story-item::before {
+  content: "";
+  position: absolute;
+  left: calc(9.5em + 13px);
+  top: 0.55em;
+  bottom: -0.55em;
+  width: 2px;
+  background: var(--line);
+}
+
+.story-item:last-child::before {
+  display: none;
+}
+
+.story-item::after {
+  content: "";
+  position: absolute;
+  left: calc(9.5em + 8px);
+  top: 0.3em;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border: 3px solid var(--paper);
+  border-radius: 50%;
+  box-sizing: content-box;
+  transform: translate(-3px, -3px);
+}
+
+.story-item.exalted {
+  --accent: var(--gold);
+}
+
+.story-item.immortal {
+  --accent: var(--immortal);
+}
+
+.story-item.burned {
+  --accent: var(--bad);
+}
+
+.story-when {
+  grid-row: span 3;
+  margin: 0;
+  font-weight: 800;
+  font-feature-settings: "tnum";
+  text-align: right;
+}
+
+.story-item h3 {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.story-item p:not(.story-when) {
+  margin: 0;
+  max-width: 40em;
+}
+
+.story-item p.story-see {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.story-foot {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .welcome h1 {
@@ -832,6 +968,30 @@ pre {
 }
 
 @media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .story-item {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 28px;
+  }
+
+  .story-item::before {
+    left: 7px;
+  }
+
+  .story-item::after {
+    left: 2px;
+  }
+
+  .story-when {
+    grid-row: auto;
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
   .hero {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
