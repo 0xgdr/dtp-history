@@ -129,7 +129,7 @@ index never picks them, because a Panda must be in a DTP collection or carry a v
 `data/mint-traits.json` has every Panda's six traits and art as minted, read from the Create
 instruction in its metadata account's first transaction and the file it points at.
 
-A grid Panda gets **✓ Original** when it was **never put through the Boots trait swap**: its current
+A grid Panda gets **Original** when it was **never put through the Boots trait swap**: its current
 art is the mint-day file, or a file uploaded in 2021 (an exalt, or a mint-week fix like #12's Body on
 23 November 2021). Boots changes only ever show as art uploaded later (`data/art-uploads.json` has
 each file's upload date from Arweave's index). An Arweave id always returns the same data, so the
@@ -142,7 +142,7 @@ uploaded and whether their traits changed. The 39 with Boots-era art but traits 
 histories built, and every one's art had really changed (no re-uploads). Of the 2,425 grid Pandas
 still on their mint-day art, none has different traits.
 
-| Grid | ✓ Original | Boots | Unknown |
+| Grid | Original | Boots | Unknown |
 |---|---|---|---|
 | Exalted (693) | 521 (468 exalt only, 53 mint-week fixes) | 170 | 2 (art lost) |
 | Un-exalted (9) | 0 | 9 | 0 |

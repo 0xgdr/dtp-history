@@ -581,7 +581,7 @@ main {
   font-size: clamp(1.25rem, 3.5vw, 1.75rem);
 }
 
-/* The number, with "✓ Original" (all six traits as minted) beside it when it applies. */
+/* The number, with "original" (never put through the Boots trait swap) beside it when it applies. */
 .grid-title {
   display: flex;
   flex-wrap: wrap;
