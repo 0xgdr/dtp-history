@@ -159,7 +159,7 @@ export function createApi(deps: ApiDeps) {
       return {
         title: `${name}: ${HEADLINES[history.verdict]}`,
         description: shareLine(history),
-        image: art && thumbSourceOk(art) ? `/thumb?src=${encodeURIComponent(art)}` : null,
+        image: art && thumbSourceOk(art) ? `/thumb?src=${encodeURIComponent(art)}&format=jpeg` : null,
         imageAlt: name,
       };
     },

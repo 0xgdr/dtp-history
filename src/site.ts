@@ -88,7 +88,12 @@ export const options = serveOptions({
     "/api/random": { GET: () => api.random() },
     "/api/stats": { GET: () => api.stats() },
     "/api/list/:kind": { GET: (req) => api.list(req.params.kind) },
-    "/thumb": { GET: (req) => thumbs(new URL(req.url).searchParams.get("src")) },
+    "/thumb": {
+      GET: (req) => {
+        const params = new URL(req.url).searchParams;
+        return thumbs(params.get("src"), params.get("format") === "jpeg" ? "jpeg" : "webp");
+      },
+    },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
   development: !production && { hmr: true, console: true },
