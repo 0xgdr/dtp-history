@@ -255,6 +255,7 @@ const STORY: StoryEntry[] = [
     text: "Pandas' metadata starts moving to GenesysGo Shadow Drive. Those files are gone now, so part of many Pandas' history can't be read.",
     art: { n: "14332", image: "https://arweave.net/qeURwoChCJUGq6e8Cx11gv8s28-rddHp25S8fpcVL-w" },
     examples: ["14332"],
+    list: "lost",
   },
   {
     year: "2022",
