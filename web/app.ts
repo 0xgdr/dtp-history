@@ -180,58 +180,95 @@ function renderWelcome(): HTMLElement {
 }
 
 // The collection's own history, as read from the chain while building this. The live counts come
-// from /api/stats; the story's own numbers are history and don't change.
-const STORY: { when: string; title: string; text: string; examples: string[]; tone?: "exalted" | "immortal" | "burned" }[] = [
+// from /api/stats; the story's own numbers are history and don't change. Each entry shows one
+// Panda's art, its image URL looked up once with DAS (getAsset), so the home page never has to
+// build a history to draw it.
+type StoryEntry = {
+  year: string;
+  when: string;
+  title: string;
+  stamp: string;
+  text: string;
+  art: { n: string; image: string };
+  examples: string[];
+  tone?: "exalted" | "immortal" | "burned";
+};
+
+const STORY: StoryEntry[] = [
   {
-    when: "22 Nov 2021",
+    year: "2021",
+    when: "22 Nov",
     title: "The drop",
+    stamp: "Minted",
     text: "A Candy Machine loaded with 20,000 Pandas starts minting on the evening of 22 November (UTC). It mints 14,173 of them, then stops.",
-    examples: ["6872"],
+    art: { n: "1", image: "https://arweave.net/iaVc5X5AmXibHvWDs90SMZL-aGh48rcgDD6j3DhTXG8" },
+    examples: ["1", "6872"],
   },
   {
-    when: "Nov 2021",
+    year: "2021",
+    when: "Late Nov",
     title: "Exalted",
+    stamp: "Exalted",
     text: "Days after mint, some early Pandas are exalted. The update that adds the exalted attribute changes their background art too.",
+    art: { n: "55", image: "https://www.arweave.net/odMAVysuwGxXyHH-pj-bhbCFTbIdvcIYYo7fR-KPc3Q?ext=png" },
     examples: ["55", "118"],
     tone: "exalted",
   },
   {
-    when: "Jan 2022",
+    year: "2022",
+    when: "Jan",
     title: "A second creator",
+    stamp: "Minted",
     text: "Minting carries on under a second creator address. About 3,400 more Pandas join the collection this way.",
+    art: { n: "13400", image: "https://www.arweave.net/7QQcHOuMk1YO6ZWLNCgpdDcDosHG5amekDW9bRQIt00?ext=png" },
     examples: ["13400"],
   },
   {
-    when: "20 Apr 2022",
+    year: "2022",
+    when: "20 Apr",
     title: "The collection is verified",
+    stamp: "Verified",
     text: "Pandas are verified into the Degenerate Trash Pandas collection on chain. Some get the same verification again and again over the following months.",
+    art: { n: "6872", image: "https://www.arweave.net/KCPnIoNva-EubeDnc6vLZRrlfijdEVN5Pi2-pz8f0ZQ?ext=png" },
     examples: ["6872", "13400"],
   },
   {
-    when: "Jan 2023",
+    year: "2023",
+    when: "Jan",
     title: "Lost metadata",
+    stamp: "404",
     text: "Some Pandas' metadata moves to GenesysGo Shadow Drive. Those files are gone now, so part of their history can't be read.",
+    art: { n: "14332", image: "https://arweave.net/qeURwoChCJUGq6e8Cx11gv8s28-rddHp25S8fpcVL-w" },
     examples: ["14332"],
   },
   {
-    when: "27–28 Jun 2023",
+    year: "2023",
+    when: "27–28 Jun",
     title: "The Immortals",
+    stamp: "Immortal",
     text: "2,395 Pandas are minted into the numbers the drop never reached, in a collection of their own: Immortal Degenerate Trash Pandas.",
+    art: { n: "14162", image: "https://www.arweave.net/5UmxUDAq3uoT_KxsOw8PQvHy268ND0VBGwGTi5DVaFY?ext=png" },
     examples: ["14162", "15000"],
     tone: "immortal",
   },
   {
-    when: "26 Jan 2024",
+    year: "2024",
+    when: "26 Jan",
     title: "#5642 switches collection",
+    stamp: "Moved",
     text: "An original from November 2021 is unverified from the main collection and put in the Immortal collection, unverified.",
+    art: { n: "5642", image: "https://www.arweave.net/GVKXKVtIOS0rEn1w7lhw1gnpWB2hoWK7nwr_K-JC9D8?ext=png" },
     examples: ["5642"],
     tone: "immortal",
   },
   {
-    when: "2022–2026",
+    year: "Ever since",
+    when: "2022–now",
     title: "Burned",
+    stamp: "Burned",
     text: "Pandas get burned now and then. Some owners burned just the token, which leaves the metadata behind and hides the Panda from most indexers.",
-    examples: ["13868", "8669"],
+    art: { n: "13868", image: "https://www.arweave.net/PRlEOmWcxPBIukdpYIK9hMQwHm1i50kChq3xMawVfL8?ext=png" },
+    examples: ["13868", "8669", "10596"],
     tone: "burned",
   },
 ];
@@ -254,6 +291,14 @@ function renderStory(): HTMLElement {
       foot.textContent = `${missing.length ? `No one has found a Panda for ${listJoin(missing)}. ` : ""}Counts from the index built on ${built}.`;
     })
     .catch(() => {});
+
+  // A year marker opens each year's entries.
+  const items: HTMLElement[] = [];
+  for (const [i, e] of STORY.entries()) {
+    if (STORY[i - 1]?.year !== e.year) items.push(h("li", { class: "story-year", "aria-hidden": "true" }, h("span", {}, e.year)));
+    items.push(renderStoryEntry(e));
+  }
+
   return h(
     "section",
     { class: "story", "aria-labelledby": "story-title" },
@@ -263,21 +308,34 @@ function renderStory(): HTMLElement {
       { class: "stats" },
       ...Object.entries(tiles).map(([k, label]) => h("div", { class: "stat" }, h("dt", {}, label), values[k as keyof typeof tiles])),
     ),
+    h("ol", { class: "story-list" }, ...items),
+    foot,
+  );
+}
+
+function renderStoryEntry(e: StoryEntry): HTMLElement {
+  const name = `Degen Trash Panda #${e.art.n}`;
+  return h(
+    "li",
+    { class: `story-item${e.tone ? ` ${e.tone}` : ""}` },
     h(
-      "ol",
-      { class: "story-list" },
-      ...STORY.map((e) =>
-        h(
-          "li",
-          { class: `story-item${e.tone ? ` ${e.tone}` : ""}` },
-          h("p", { class: "story-when" }, e.when),
-          h("h3", {}, e.title),
-          h("p", {}, e.text),
-          h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
-        ),
+      "article",
+      { class: "story-card" },
+      h(
+        "figure",
+        { class: "story-art" },
+        lookupLink(e.art.n, thumb(e.art.image, name, "story-img"), { "aria-label": name }),
+        h("span", { class: "story-stamp", "aria-hidden": "true" }, e.stamp),
+      ),
+      h(
+        "div",
+        { class: "story-text" },
+        h("p", { class: "story-when" }, e.year === "Ever since" ? e.when : `${e.when} ${e.year}`),
+        h("h3", {}, e.title),
+        h("p", {}, e.text),
+        h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
       ),
     ),
-    foot,
   );
 }
 
@@ -788,8 +846,8 @@ function randomLink(): HTMLElement {
   return a;
 }
 
-function lookupLink(q: string, text: string): HTMLElement {
-  const a = h("a", { href: `?n=${encodeURIComponent(q)}` }, text);
+function lookupLink(q: string, content: Child, attrs: Record<string, string> = {}): HTMLElement {
+  const a = h("a", { href: `?n=${encodeURIComponent(q)}`, ...attrs }, content);
   a.addEventListener("click", (event) => {
     event.preventDefault();
     input.value = q;

@@ -229,48 +229,63 @@ main {
   font-weight: 600;
 }
 
+/* The rail runs down the left of the list; each card hangs a dot on it, and each year sits on it
+   as a big outlined label. */
 .story-list {
+  --rail: 40px;
+  position: relative;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--rail);
+}
+
+.story-list::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: linear-gradient(var(--line), var(--line) 85%, transparent);
+}
+
+.story-year {
+  position: relative;
+  margin: 12px 0 14px calc(-1 * var(--rail));
+}
+
+.story-year span {
+  display: inline-block;
+  padding: 0 12px 0 0;
+  color: transparent;
+  background: var(--paper);
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 125;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+  line-height: 1;
+  -webkit-text-stroke: 1.5px color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
 .story-item {
   --accent: var(--ink);
   position: relative;
-  display: grid;
-  grid-template-columns: 9.5em minmax(0, 1fr);
-  column-gap: 28px;
-  padding: 0 0 28px;
+  margin: 0 0 16px;
 }
 
-/* The rail and its dot, between the date and the text. */
+/* The dot, on the rail beside the card's heading. */
 .story-item::before {
   content: "";
   position: absolute;
-  left: calc(9.5em + 13px);
-  top: 0.55em;
-  bottom: -0.55em;
-  width: 2px;
-  background: var(--line);
-}
-
-.story-item:last-child::before {
-  display: none;
-}
-
-.story-item::after {
-  content: "";
-  position: absolute;
-  left: calc(9.5em + 8px);
-  top: 0.3em;
-  width: 12px;
-  height: 12px;
+  left: calc(-1 * var(--rail) + 7px);
+  top: 26px;
+  width: 10px;
+  height: 10px;
   background: var(--accent);
-  border: 3px solid var(--paper);
+  border: 2px solid var(--paper);
   border-radius: 50%;
-  box-sizing: content-box;
-  transform: translate(-3px, -3px);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .story-item.exalted {
@@ -285,29 +300,87 @@ main {
   --accent: var(--bad);
 }
 
-.story-when {
-  grid-row: span 3;
+.story-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  padding: 18px 22px 18px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.story-art {
+  position: relative;
   margin: 0;
-  font-weight: 800;
+}
+
+.story-art a {
+  display: block;
+  border-radius: var(--radius);
+  transition: transform 160ms ease;
+}
+
+.story-art a:hover {
+  transform: rotate(-2deg) scale(1.03);
+}
+
+.story-item.burned .story-img .thumb-img {
+  filter: grayscale(1) brightness(0.7);
+}
+
+/* The same tilted ink stamp as the verdict on a Panda's page, smaller. */
+.story-stamp {
+  position: absolute;
+  left: -8px;
+  bottom: 10px;
+  padding: 2px 8px 3px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border: 3px double var(--accent);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.story-text {
+  min-width: 0;
+}
+
+.story-when {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
   font-feature-settings: "tnum";
-  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .story-item h3 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   color: var(--accent);
-  font-size: 1.125rem;
-  font-weight: 800;
-  line-height: 1.3;
+  font-size: 1.375rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.2;
 }
 
-.story-item p:not(.story-when) {
+.story-text p {
   margin: 0;
   max-width: 40em;
 }
 
-.story-item p.story-see {
-  margin-top: 6px;
+.story-text p.story-see {
+  margin-top: 8px;
   color: var(--muted);
   font-size: 0.9375rem;
 }
@@ -972,24 +1045,33 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .story-item {
-    grid-template-columns: minmax(0, 1fr);
-    padding-left: 28px;
+  .story-list {
+    --rail: 28px;
   }
 
-  .story-item::before {
+  .story-list::before {
     left: 7px;
   }
 
-  .story-item::after {
-    left: 2px;
+  .story-item::before {
+    left: calc(-1 * var(--rail) + 1px);
+    top: 20px;
   }
 
-  .story-when {
-    grid-row: auto;
-    text-align: left;
-    color: var(--muted);
-    font-size: 0.875rem;
+  .story-card {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .story-stamp {
+    left: -6px;
+    bottom: 6px;
+    font-size: 0.6875rem;
+  }
+
+  .story-item h3 {
+    font-size: 1.125rem;
   }
 
   .hero {
