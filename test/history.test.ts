@@ -204,7 +204,7 @@ describe("API", () => {
       { id: "Dup2222222222222222222222222222222", content: { metadata: { name: "Degen Trash Panda #7" } }, grouping: [{ group_key: "collection", group_value: "GoLMLLR6iSUrA6KsCrFh7f45Uq5EHFQ3p8RmzPoUH9mb" }] },
     ],
     "GoLMLLR6iSUrA6KsCrFh7f45Uq5EHFQ3p8RmzPoUH9mb",
-    "CLErvyrMpi66RAxNV2wveSi25NxHb8G383MSVuGDgZzp",
+    ["CLErvyrMpi66RAxNV2wveSi25NxHb8G383MSVuGDgZzp"],
     "2026-10-20T00:00:00.000Z",
   );
 

@@ -3,7 +3,7 @@ import { PANDA_NAME_RE } from "./constants.ts";
 export type PandaIndex = {
   generatedAt: string;
   collection: string;
-  creator: string;
+  creators: string[];
   count: number;
   pandas: Record<string, string>;
   duplicates: Record<string, string[]>;
@@ -61,9 +61,14 @@ export type DasAsset = {
   creators?: { address: string; verified: boolean }[];
 };
 
-// An asset belongs if it is in the verified collection or carries the verified DTP creator.
-// Pass the pages of both `getAssetsByGroup` and `getAssetsByCreator`; overlap is deduplicated.
-export function buildIndex(assets: DasAsset[], collection: string, creator: string, generatedAt: string): PandaIndex {
+// An asset belongs if it is in the verified collection or carries a verified DTP creator.
+// Pass the pages of `getAssetsByGroup`, `getAssetsByCreator` and burnt `searchAssets`; overlap is deduplicated.
+export function buildIndex(
+  assets: DasAsset[],
+  collection: string,
+  creators: readonly string[],
+  generatedAt: string,
+): PandaIndex {
   const byNumber = new Map<number, string[]>();
   const burned: Record<string, string> = {};
   const unparsed: { mint: string; name: string }[] = [];
@@ -73,7 +78,7 @@ export function buildIndex(assets: DasAsset[], collection: string, creator: stri
     if (seen.has(asset.id)) continue;
     seen.add(asset.id);
     const inCollection = asset.grouping?.some((g) => g.group_key === "collection" && g.group_value === collection);
-    const byCreator = asset.creators?.some((c) => c.address === creator && c.verified);
+    const byCreator = asset.creators?.some((c) => c.verified && creators.includes(c.address));
     if (!inCollection && !byCreator) continue;
     const name = asset.content?.metadata?.name ?? "";
     const n = pandaNumber(name);
@@ -105,7 +110,7 @@ export function buildIndex(assets: DasAsset[], collection: string, creator: stri
   return {
     generatedAt,
     collection,
-    creator,
+    creators: [...creators],
     count: Object.keys(pandas).length,
     pandas,
     duplicates,
