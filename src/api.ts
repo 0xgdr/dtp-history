@@ -1,9 +1,12 @@
 import { buildHistory, readCachedHistory, type BuildProgress, type Deps, type HistoryResult } from "./history.ts";
 import { parseInput, resolve, type PandaIndex } from "./index-lookup.ts";
+import { LIST_KINDS, type ListEntry, type ListKind, type PandaLists } from "./lists.ts";
 import { RpcError } from "./rpc.ts";
 
 type ApiDeps = Deps & {
   index: PandaIndex | null;
+  // The Exalted, Immortal and Burned grids (data/lists.json, built with the index).
+  lists?: PandaLists | null;
   // How often a cached history is re-checked against chain in the background.
   revalidateMs?: number;
   // How long a request waits for a new build before answering "still building" (202) instead.
@@ -29,6 +32,7 @@ type BuildMarker = { at: number; progress: BuildProgress | null };
 type Building = { building: BuildProgress | null };
 
 export type Stats = { numbers: number; live: number; burned: number; missing: number[]; generatedAt: string };
+export type List = { kind: ListKind; generatedAt: string; pandas: ListEntry[] };
 
 // Route handlers, kept apart from Bun.serve so tests can call them directly.
 export function createApi(deps: ApiDeps) {
@@ -169,6 +173,16 @@ export function createApi(deps: ApiDeps) {
         { numbers, live: deps.index.count, burned: Object.keys(burned).length, missing, generatedAt } satisfies Stats,
         { headers: { "cache-control": "public, max-age=300" } },
       );
+    },
+
+    // One of the grids on the home page.
+    list(kind: string): Response {
+      const known = LIST_KINDS.find((k) => k === kind);
+      if (!known) return error(404, "not_found", `no list called ${kind}`);
+      if (!deps.lists) return error(503, "no_lists", "the lists have not been built (bun run index)");
+      return Response.json({ kind: known, generatedAt: deps.lists.generatedAt, pandas: deps.lists[known] } satisfies List, {
+        headers: { "cache-control": "public, max-age=300" },
+      });
     },
 
     // A random Panda number from the index, so the page never lands on a missing number.

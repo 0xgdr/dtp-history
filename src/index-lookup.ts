@@ -56,7 +56,11 @@ export function resolve(index: PandaIndex, n: number): Resolution {
 export type DasAsset = {
   id: string;
   burnt?: boolean;
-  content?: { metadata?: { name?: string } };
+  content?: {
+    metadata?: { name?: string; attributes?: { trait_type: string; value: unknown }[] };
+    links?: { image?: string };
+    json_uri?: string;
+  };
   grouping?: { group_key: string; group_value: string }[];
   creators?: { address: string; verified: boolean }[];
 };

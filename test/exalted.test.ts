@@ -25,6 +25,10 @@ describe("exalted", () => {
     );
   });
 
+  test("an emptied stat (\"EXALTED_STAT: None\", as on #29) names no stat", () => {
+    expect(exaltedNames([stat("RUGGED_COUNT: 2"), stat("EXALTED_STAT: None")])).toEqual(new Set(["RUGGED_COUNT"]));
+  });
+
   test("adding the stat in either form counts; renaming doesn't add", () => {
     const names = new Set(["TELL_ME_A_JOKE"]);
     expect(addsExalted([oldForm], names)).toBe(true);

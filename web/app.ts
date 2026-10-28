@@ -2,9 +2,10 @@
 // traits.ts is tiny and dependency-free, so the page reuses the server's trait matching.
 import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
-import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
-import type { Stats } from "../src/api.ts";
+import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/exalted.ts";
+import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
+import type { ListEntry, ListKind } from "../src/lists.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -21,7 +22,8 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const q = input.value.trim();
   if (!q) return;
-  const url = new URL(location.href);
+  // A fresh query, so a lookup from a grid doesn't keep ?list= in the URL.
+  const url = new URL(location.pathname, location.origin);
   url.searchParams.set("n", q);
   history.pushState(null, "", url);
   load(q);
@@ -29,9 +31,12 @@ form.addEventListener("submit", (event) => {
 
 
 function loadFromUrl(): void {
-  const q = new URLSearchParams(location.search).get("n")?.trim() ?? "";
+  const params = new URLSearchParams(location.search);
+  const q = params.get("n")?.trim() ?? "";
+  const list = LISTS.find((l) => l.kind === params.get("list"));
   input.value = q;
   if (q) load(q);
+  else if (list) loadList(list);
   else result.replaceChildren(renderWelcome());
 }
 
@@ -198,7 +203,8 @@ type StoryEntry = {
   text: string;
   art: { n: string; image: string };
   examples: string[];
-  tone?: "exalted" | "immortal" | "burned";
+  tone?: "exalted" | "unexalted" | "immortal" | "burned";
+  list?: ListKind;
 };
 
 const STORY: StoryEntry[] = [
@@ -220,6 +226,7 @@ const STORY: StoryEntry[] = [
     art: { n: "55", image: "https://www.arweave.net/odMAVysuwGxXyHH-pj-bhbCFTbIdvcIYYo7fR-KPc3Q?ext=png" },
     examples: ["55", "118"],
     tone: "exalted",
+    list: "exalted",
   },
   {
     year: "2022",
@@ -240,6 +247,17 @@ const STORY: StoryEntry[] = [
     examples: ["6872", "13400"],
   },
   {
+    year: "2022",
+    when: "Late",
+    title: "Un-exalted",
+    stamp: "Un-exalted",
+    text: "Nine exalted Pandas get new traits, and their exalted stat now reads \u201cNone\u201d. Their metadata from those weeks was on Shadow Drive and is gone, so the exact day is lost: by 22 December 2022 it had happened.",
+    art: { n: "1020", image: "https://ardrive.net/xK7TFh3q0MZ_RZ_1ThlISFVybbsK5LRpy-dI-RXScx4" },
+    examples: ["29", "1020"],
+    tone: "unexalted",
+    list: "unexalted",
+  },
+  {
     year: "2023",
     when: "Jan",
     title: "Lost metadata",
@@ -257,6 +275,7 @@ const STORY: StoryEntry[] = [
     art: { n: "14162", image: "https://www.arweave.net/5UmxUDAq3uoT_KxsOw8PQvHy268ND0VBGwGTi5DVaFY?ext=png" },
     examples: ["14162", "15000"],
     tone: "immortal",
+    list: "immortal",
   },
   {
     year: "2024",
@@ -277,6 +296,7 @@ const STORY: StoryEntry[] = [
     art: { n: "13868", image: "https://www.arweave.net/PRlEOmWcxPBIukdpYIK9hMQwHm1i50kChq3xMawVfL8?ext=png" },
     examples: ["13868", "8669", "10596"],
     tone: "burned",
+    list: "burned",
   },
 ];
 
@@ -341,9 +361,115 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
         h("h3", {}, e.title),
         h("p", {}, e.text),
         h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
+        e.list ? h("p", { class: "story-list-link" }, listLink(e.list)) : "",
       ),
     ),
   );
+}
+
+// --- The grids: every exalted, Immortal or burned Panda, from /api/list/:kind ---
+
+const LISTS: { kind: ListKind; title: string; link: string; intro: string }[] = [
+  {
+    kind: "exalted",
+    title: "Exalted Pandas",
+    link: "See every exalted Panda",
+    intro: "Every Panda carrying an exalted stat today, and what it is. Exalting changed their background art.",
+  },
+  {
+    kind: "unexalted",
+    title: "Un-exalted Pandas",
+    link: "See every un-exalted Panda",
+    intro: "Once exalted, now their exalted stat reads \u201cNone\u201d. Each had its traits swapped in late 2022, when its metadata was on Shadow Drive.",
+  },
+  {
+    kind: "immortal",
+    title: "The Immortals",
+    link: "See all the Immortals",
+    intro: "Minted on 27–28 June 2023 into the numbers the drop never reached, in the Immortal Degenerate Trash Pandas collection.",
+  },
+  {
+    kind: "burned",
+    title: "Burned Pandas",
+    link: "See every burned Panda",
+    intro: "Gone for good. A few owners burned just the token, which leaves the metadata behind.",
+  },
+];
+
+function listLink(kind: ListKind): HTMLElement {
+  const list = LISTS.find((l) => l.kind === kind)!;
+  const a = h("a", { href: `?list=${kind}` }, `${list.link} →`);
+  a.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.pushState(null, "", `?list=${kind}`);
+    loadFromUrl();
+    window.scrollTo(0, 0);
+  });
+  return a;
+}
+
+async function loadList(list: (typeof LISTS)[number]): Promise<void> {
+  inflight?.abort();
+  const controller = new AbortController();
+  inflight = controller;
+  const head = h(
+    "header",
+    { class: "grid-head" },
+    homeLink(),
+    h("h1", {}, list.title),
+    h("p", { class: "grid-intro" }, list.intro),
+  );
+  const status = h("p", { class: "grid-count" }, "Loading…");
+  result.replaceChildren(h("section", { class: `grid-page ${list.kind}` }, head, status));
+  try {
+    const res = await fetch(`/api/list/${list.kind}`, { signal: controller.signal });
+    if (!res.ok) throw new Error(String(res.status));
+    const body = (await res.json()) as List;
+    if (controller.signal.aborted) return;
+    const burned = body.pandas.filter((p) => p.burned).length;
+    status.textContent =
+      `${body.pandas.length.toLocaleString("en-GB")} Pandas` +
+      (burned && list.kind !== "burned" ? `, ${burned} of them burned` : "") +
+      `. From the index built on ${longDate(Date.parse(body.generatedAt) / 1000)}.`;
+    status.after(h("ul", { class: "panda-grid" }, ...body.pandas.map(renderGridPanda)));
+  } catch {
+    if (controller.signal.aborted) return;
+    status.textContent = "The list couldn't be loaded. Try again in a moment.";
+  }
+}
+
+// GenesysGo Shadow Drive is gone (docs/data-gaps.md), so art last hosted there can't load.
+const LOST_HOST = "shdw-drive.genesysgo.net";
+
+function renderGridPanda(p: ListEntry): HTMLElement {
+  const name = `Degen Trash Panda #${p.n}`;
+  const lost = p.image !== null && hostOf(p.image) === LOST_HOST;
+  return h(
+    "li",
+    { class: `grid-panda${p.burned ? " burned" : ""}` },
+    lookupLink(
+      String(p.n),
+      h(
+        "span",
+        { class: "grid-card" },
+        lost ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive") : thumb(p.image, name, "grid-img"),
+        p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
+        h("span", { class: "grid-n" }, `#${p.n}`),
+        p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
+      ),
+      { "aria-label": `${name}${p.burned ? ", burned" : ""}` },
+    ),
+  );
+}
+
+function homeLink(): HTMLElement {
+  const a = h("a", { href: "/", class: "grid-back" }, "← The collection");
+  a.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.pushState(null, "", "/");
+    loadFromUrl();
+  });
+  return a;
 }
 
 type Problem = { title: string; text: string; retry?: boolean; random?: boolean; candidates?: string[] };
@@ -484,8 +610,17 @@ function renderBadges(r: HistoryResult, mintDate: string): HTMLElement {
       },
       mintDate ? `${series} · minted ${mintDate}` : series,
     ),
+    unexalted(r)
+      ? h("span", { class: "badge unexalted", title: "Its exalted stat now reads \u201cNone\u201d" }, "Un-exalted")
+      : "",
     r.burned ? h("span", { class: "badge burned" }, "Burned") : "",
   );
+}
+
+// Exalted once, but the stat now reads "None" (see isEmptyExaltedStat).
+function unexalted(r: HistoryResult): boolean {
+  const stat = readTraits(r.steps.at(-1)?.json ?? null).values.get(EXALTED);
+  return stat !== undefined && isEmptyExaltedStat(stat);
 }
 
 // The six traits and the image, mint vs now. This is what the verdict is about.
@@ -773,7 +908,17 @@ function cosmeticPhrases(changes: Change[], exalted: Set<string>): string[] {
 
   const phrases: string[] = [];
   if (renamed) phrases.push("exalted attribute renamed");
-  else if (stat) phrases.push(stat.from === "missing" ? "exalted attribute added" : stat.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
+  else if (stat) {
+    phrases.push(
+      stat.from === "missing"
+        ? "exalted attribute added"
+        : stat.to === "missing"
+          ? "exalted attribute removed"
+          : isEmptyExaltedStat(String(stat.to))
+            ? "exalted stat emptied"
+            : "exalted attribute changed",
+    );
+  }
   for (const c of oldForm) {
     if (renamed && c.to === "missing") continue;
     phrases.push(c.from === "missing" ? "exalted attribute added" : c.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
