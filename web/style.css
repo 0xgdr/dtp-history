@@ -423,20 +423,23 @@ main {
   max-width: 40em;
 }
 
-.story-text p.story-see {
-  margin-top: 8px;
+
+/* A footer across the whole card: the example Pandas on the left, "See every…" on the right
+   (under them when there isn't room). */
+.story-foot-links {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.9375rem;
 }
 
-/* "See every…" sits in its own column at the right of the card. */
-.story-card:has(.story-list-link) {
-  grid-template-columns: 132px minmax(0, 1fr) auto;
-}
-
 .story-list-link {
-  align-self: center;
-  margin: 0;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1257,12 +1260,7 @@ pre {
     font-size: 1rem;
   }
 
-  .story-card:has(.story-list-link) {
-    grid-template-columns: 84px minmax(0, 1fr);
-  }
-
   .story-list-link {
-    grid-column: 2;
     white-space: normal;
   }
 

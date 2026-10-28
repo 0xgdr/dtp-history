@@ -360,9 +360,14 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
         h("p", { class: "story-when" }, e.year === "Ever since" ? e.when : `${e.when} ${e.year}`),
         h("h3", {}, e.title),
         h("p", {}, e.text),
-        h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
       ),
-      e.list ? h("p", { class: "story-list-link" }, listLink(e.list)) : "",
+      // The card's footer: the example Pandas on the left, "See every…" on the right.
+      h(
+        "footer",
+        { class: "story-foot-links" },
+        h("span", {}, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
+        e.list ? h("span", { class: "story-list-link" }, listLink(e.list)) : "",
+      ),
     ),
   );
 }
