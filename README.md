@@ -34,7 +34,12 @@ bun run typecheck
 bun run index      # rebuild data/panda-index.json (needs a DAS-capable RPC_URL, e.g. Helius)
 bun run fixtures   # re-record test/fixtures/6872 (needs RPC_URL)
 bun --env-file=.env scripts/find-unlisted-mints.ts  # one-off, ~50 min: see below
+bun --env-file=.env scripts/snapshot-metadata.ts    # every Panda's on-chain metadata URI (~200 calls)
 ```
+
+`docs/collection-history.md` records what the chain shows about the collection (candy machines,
+Immortals, un-exalted and off-collection Pandas, token burns, the October 2026 move off Shadow
+Drive) and which committed data file backs each fact, so none of it needs re-checking on chain.
 
 `data/extra-mints.json` lists Pandas that DAS won't list, because only their token was burned (supply
 0, metadata left behind). The index build fetches them by id, and adds any Panda it loses between

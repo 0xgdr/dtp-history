@@ -2,10 +2,13 @@
 
 Things in the DTP chain history that the app can't fully recover, and how it handles them.
 
-## Shadow Drive metadata (January 2023)
+## Shadow Drive metadata (December 2022 – October 2026)
 
-In January 2023, some Pandas' metadata URIs were moved to **GenesysGo Shadow Drive**
-(`shdw-drive.genesysgo.net`). Those files are now gone: every request returns **404**.
+From December 2022 at the latest (#15639's first Shadow Drive URI is 15 December 2022), Pandas'
+metadata URIs were moved to **GenesysGo Shadow Drive** (`shdw-drive.genesysgo.net`). Those files are
+now gone: every request returns **404**. Around 12–13 October 2026 the metadata was moved to
+ArDrive, except for #15639 and the token-burned #11485, which still point at Shadow Drive (see
+`docs/collection-history.md`).
 
 For an affected Panda, every metadata update between the move and the next update that points
 somewhere readable has no JSON. For **#14332**, everything between **9 October 2022** and
