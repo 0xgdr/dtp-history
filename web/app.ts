@@ -2,7 +2,7 @@
 // traits.ts is tiny and dependency-free, so the page reuses the server's trait matching.
 import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
-import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
+import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/exalted.ts";
 import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import type { ListEntry, ListKind } from "../src/lists.ts";
@@ -203,7 +203,7 @@ type StoryEntry = {
   text: string;
   art: { n: string; image: string };
   examples: string[];
-  tone?: "exalted" | "immortal" | "burned";
+  tone?: "exalted" | "unexalted" | "immortal" | "burned";
   list?: ListKind;
 };
 
@@ -245,6 +245,17 @@ const STORY: StoryEntry[] = [
     text: "Pandas are verified into the Degenerate Trash Pandas collection on chain. Some get the same verification again and again over the following months.",
     art: { n: "6872", image: "https://www.arweave.net/KCPnIoNva-EubeDnc6vLZRrlfijdEVN5Pi2-pz8f0ZQ?ext=png" },
     examples: ["6872", "13400"],
+  },
+  {
+    year: "2022",
+    when: "Late",
+    title: "Un-exalted",
+    stamp: "Un-exalted",
+    text: "Nine exalted Pandas get new traits, and their exalted stat now reads \u201cNone\u201d. Their metadata from those weeks was on Shadow Drive and is gone, so the exact day is lost: by 22 December 2022 it had happened.",
+    art: { n: "1020", image: "https://ardrive.net/xK7TFh3q0MZ_RZ_1ThlISFVybbsK5LRpy-dI-RXScx4" },
+    examples: ["29", "1020"],
+    tone: "unexalted",
+    list: "unexalted",
   },
   {
     year: "2023",
@@ -364,6 +375,12 @@ const LISTS: { kind: ListKind; title: string; link: string; intro: string }[] = 
     title: "Exalted Pandas",
     link: "See every exalted Panda",
     intro: "Every Panda carrying an exalted stat today, and what it is. Exalting changed their background art.",
+  },
+  {
+    kind: "unexalted",
+    title: "Un-exalted Pandas",
+    link: "See every un-exalted Panda",
+    intro: "Once exalted, now their exalted stat reads \u201cNone\u201d. Each had its traits swapped in late 2022, when its metadata was on Shadow Drive.",
   },
   {
     kind: "immortal",
@@ -593,8 +610,17 @@ function renderBadges(r: HistoryResult, mintDate: string): HTMLElement {
       },
       mintDate ? `${series} · minted ${mintDate}` : series,
     ),
+    unexalted(r)
+      ? h("span", { class: "badge unexalted", title: "Its exalted stat now reads \u201cNone\u201d" }, "Un-exalted")
+      : "",
     r.burned ? h("span", { class: "badge burned" }, "Burned") : "",
   );
+}
+
+// Exalted once, but the stat now reads "None" (see isEmptyExaltedStat).
+function unexalted(r: HistoryResult): boolean {
+  const stat = readTraits(r.steps.at(-1)?.json ?? null).values.get(EXALTED);
+  return stat !== undefined && isEmptyExaltedStat(stat);
 }
 
 // The six traits and the image, mint vs now. This is what the verdict is about.
@@ -882,7 +908,17 @@ function cosmeticPhrases(changes: Change[], exalted: Set<string>): string[] {
 
   const phrases: string[] = [];
   if (renamed) phrases.push("exalted attribute renamed");
-  else if (stat) phrases.push(stat.from === "missing" ? "exalted attribute added" : stat.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
+  else if (stat) {
+    phrases.push(
+      stat.from === "missing"
+        ? "exalted attribute added"
+        : stat.to === "missing"
+          ? "exalted attribute removed"
+          : isEmptyExaltedStat(String(stat.to))
+            ? "exalted stat emptied"
+            : "exalted attribute changed",
+    );
+  }
   for (const c of oldForm) {
     if (renamed && c.to === "missing") continue;
     phrases.push(c.from === "missing" ? "exalted attribute added" : c.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");

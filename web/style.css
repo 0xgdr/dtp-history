@@ -15,6 +15,7 @@
   --sticker: #f2c230;
   --sticker-ink: #1d1a0a;
   --exalted: #b8ff2e; /* toxic lime: exalting is naughty */
+  --unexalted: color-mix(in srgb, var(--exalted) 45%, var(--muted)); /* the lime, faded */
   --immortal: #c9a8ff;
   --ok: #6fd39b;
   --bad: #ff7a6b;
@@ -331,6 +332,10 @@ main {
   --accent: var(--exalted);
 }
 
+.story-item.unexalted {
+  --accent: var(--unexalted);
+}
+
 .story-item.immortal {
   --accent: var(--immortal);
 }
@@ -440,6 +445,10 @@ main {
 
 .grid-page.exalted {
   --accent: var(--exalted);
+}
+
+.grid-page.unexalted {
+  --accent: var(--unexalted);
 }
 
 .grid-page.immortal {
@@ -874,6 +883,11 @@ main {
   font-weight: 700;
   border: 1px solid var(--line);
   border-radius: 999px;
+}
+
+.badge.unexalted {
+  color: var(--unexalted);
+  border-color: var(--unexalted);
 }
 
 .badge.immortal {

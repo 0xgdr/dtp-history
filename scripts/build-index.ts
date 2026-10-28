@@ -98,7 +98,9 @@ console.log(
   `count ${index.count}, duplicates ${Object.keys(index.duplicates).length}, burned ${Object.keys(index.burned).length}, ` +
     `missing ${index.missing.length}, unparsed ${index.unparsed.length}`,
 );
-console.log(`lists: exalted ${lists.exalted.length}, immortal ${lists.immortal.length}, burned ${lists.burned.length}`);
+console.log(
+  `lists: exalted ${lists.exalted.length}, un-exalted ${lists.unexalted.length}, immortal ${lists.immortal.length}, burned ${lists.burned.length}`,
+);
 if (index.count < 10_000) {
   console.error(`count ${index.count} is below 10000: paging probably failed`);
   process.exit(1);

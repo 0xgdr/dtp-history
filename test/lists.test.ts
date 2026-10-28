@@ -52,8 +52,9 @@ describe("buildLists", () => {
     expect(lists.burned.map((e) => e.n)).toEqual([3, 5]);
   });
 
-  test("an emptied stat (\"EXALTED_STAT: None\") is not exalted", () => {
+  test("an emptied stat (\"EXALTED_STAT: None\") is un-exalted, not exalted", () => {
     expect(lists.exalted.some((e) => e.n === 8)).toBe(false);
+    expect(lists.unexalted.map((e) => e.n)).toEqual([8]);
   });
 
   test("a copycat is in no list, and a non-http image is dropped", () => {

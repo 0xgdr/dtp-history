@@ -1,11 +1,12 @@
 import { DTP_IMMORTAL_COLLECTION_MINT } from "./constants.ts";
-import { EXALTED } from "./exalted.ts";
+import { EXALTED, isEmptyExaltedStat } from "./exalted.ts";
 import type { DasAsset, PandaIndex } from "./index-lookup.ts";
 
 // The Pandas behind the home page's Exalted, Immortal and Burned grids, built alongside the index
-// from the same DAS pages (scripts/build-index.ts), so they cost no extra calls.
-export type ListKind = "exalted" | "immortal" | "burned";
-export const LIST_KINDS: ListKind[] = ["exalted", "immortal", "burned"];
+// from the same DAS pages (scripts/build-index.ts), so they cost no extra calls. "Un-exalted" are
+// the Pandas whose exalted stat now reads "None".
+export type ListKind = "exalted" | "unexalted" | "immortal" | "burned";
+export const LIST_KINDS: ListKind[] = ["exalted", "unexalted", "immortal", "burned"];
 
 export type ListEntry = {
   n: number;
@@ -25,7 +26,7 @@ export function buildLists(assets: DasAsset[], index: PandaIndex): PandaLists {
   for (const [n, mint] of Object.entries(index.pandas)) numberOf.set(mint, Number(n));
   for (const [n, mint] of Object.entries(index.burned)) numberOf.set(mint, Number(n));
 
-  const lists: PandaLists = { generatedAt: index.generatedAt, exalted: [], immortal: [], burned: [] };
+  const lists: PandaLists = { generatedAt: index.generatedAt, exalted: [], unexalted: [], immortal: [], burned: [] };
   const seen = new Set<string>();
   for (const asset of assets) {
     const n = numberOf.get(asset.id);
@@ -39,7 +40,10 @@ export function buildLists(assets: DasAsset[], index: PandaIndex): PandaLists {
       burned: index.burned[n] === asset.id,
     };
     const stat = asset.content?.metadata?.attributes?.find((a) => a.trait_type === EXALTED)?.value;
-    if (stat !== undefined && !isEmptyStat(String(stat))) lists.exalted.push({ ...entry, stat: String(stat) });
+    if (stat !== undefined) {
+      if (isEmptyExaltedStat(String(stat))) lists.unexalted.push(entry);
+      else lists.exalted.push({ ...entry, stat: String(stat) });
+    }
     if (asset.grouping?.some((g) => g.group_key === "collection" && g.group_value === DTP_IMMORTAL_COLLECTION_MINT)) {
       lists.immortal.push(entry);
     }
@@ -47,10 +51,4 @@ export function buildLists(assets: DasAsset[], index: PandaIndex): PandaLists {
   }
   for (const kind of LIST_KINDS) lists[kind].sort((a, b) => a.n - b.n);
   return lists;
-}
-
-// A Panda stripped of its exalted stat keeps the slot as "EXALTED_STAT: None" (#29, on
-// 22 December 2022), so it isn't exalted any more.
-function isEmptyStat(stat: string): boolean {
-  return /:\s*none$/i.test(stat.trim());
 }
