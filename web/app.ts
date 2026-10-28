@@ -486,6 +486,9 @@ function renderGridPanda(p: ListEntry): HTMLElement {
             ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive")
             : thumb(thumbUrl(p.image), name, "grid-img"),
         p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
+        p.original
+          ? h("span", { class: "grid-original", title: "All six traits match the mint (the art may still differ, e.g. when exalted)" }, "✓ Original")
+          : "",
         h("span", { class: "grid-n" }, `#${p.n}`),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
         p.note ? h("span", { class: "grid-stat" }, p.note) : "",
@@ -493,7 +496,7 @@ function renderGridPanda(p: ListEntry): HTMLElement {
           ? h("span", { class: "grid-stat" }, `Last readable art, ${shortDate(Date.parse(p.lastArt.at) / 1000)}. Current art lost.`)
           : "",
       ),
-      { "aria-label": `${name}${p.burned ? ", burned" : ""}${lost ? ", current art lost" : ""}` },
+      { "aria-label": `${name}${p.original ? ", traits original" : ""}${p.burned ? ", burned" : ""}${lost ? ", current art lost" : ""}` },
     ),
   );
 }

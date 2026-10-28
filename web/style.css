@@ -592,6 +592,24 @@ main {
   font-size: clamp(1.25rem, 3.5vw, 1.75rem);
 }
 
+/* All six traits as minted: a green stamp opposite the burned one. */
+.grid-original {
+  position: absolute;
+  right: 4px;
+  top: 12px;
+  padding: 1px 6px 2px;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border: 2px double var(--ok);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transform: rotate(6deg);
+}
+
 .grid-burned {
   position: absolute;
   left: 4px;
