@@ -492,7 +492,7 @@ function renderGridPanda(p: ListEntry): HTMLElement {
           { class: "grid-title" },
           h("span", { class: "grid-n" }, `#${p.n}`),
           p.original
-            ? h("span", { class: "grid-original", title: "Never trait-swapped with Boots: its art is the mint-day art, or from 2021 (an exalt or a mint-week fix)" }, "✓ Original")
+            ? h("span", { class: "grid-original", title: "Never trait-swapped with Boots: its art is the mint-day art, or from 2021 (an exalt or a mint-week fix)" }, "original")
             : "",
         ),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
