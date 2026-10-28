@@ -352,7 +352,6 @@ main {
   padding: 18px 22px 18px 18px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
   border-radius: var(--radius);
 }
 
