@@ -118,7 +118,13 @@ describe("#6872 full pipeline", () => {
 
     expect(result.steps.flatMap((s) => s.diff).every((c) => c.tag === "cosmetic")).toBe(true);
     expect(result.steps.flatMap((s) => [s.authority, ...s.txSigners])).toContain(TRSH);
-    expect(result.otherMetadataIx.map((o) => o.kind)).toEqual(["Other(10)", "Other(25)", "Other(56)", "Other(54)"]);
+    expect(result.otherMetadataIx.map((o) => o.kind)).toEqual(["CreateMasterEdition", "Resize", "Collect"]);
+    expect(result.series).toBe("Original");
+    expect(result.collectionEvents).toMatchObject([
+      { action: "verified", collection: "GoLMLLR6iSUrA6KsCrFh7f45Uq5EHFQ3p8RmzPoUH9mb", dateUtc: expect.stringMatching(/^2022-04-20/) },
+    ]);
+    // Joining the collection is not an update with metadata, so it isn't a step.
+    expect(result.steps.some((s) => s.diff.some((c) => c.path === "collection"))).toBe(false);
   });
 
   test("the 2026-10-12 step shows the creators change and the ardrive move", async () => {
