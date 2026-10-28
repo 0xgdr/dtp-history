@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
-import { buildIndex, pandaNumber, parseInput, resolve, type DasAsset } from "../src/index-lookup.ts";
+import { buildIndex, lostMints, pandaNumber, parseInput, resolve, type DasAsset } from "../src/index-lookup.ts";
 
 const asset = (id: string, name: string, extra: Partial<DasAsset> = {}): DasAsset => ({
   id,
@@ -97,5 +97,29 @@ describe("buildIndex", () => {
     expect(resolve(index, 4)).toEqual({ kind: "burned", mint: "m4" });
     expect(resolve(index, 5)).toEqual({ kind: "missing" });
     expect(resolve(index, 99)).toEqual({ kind: "unknown" });
+  });
+});
+
+describe("lostMints", () => {
+  const build = (assets: DasAsset[]) => buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, "2026-10-28T00:00:00.000Z");
+  const previous = build([
+    asset("m1", "Degen Trash Panda #1"),
+    asset("m2", "Degen Trash Panda #2"),
+    asset("m3", "Degen Trash Panda #3", { burnt: true }),
+    asset("m5", "Degen Trash Panda #5"),
+  ]);
+
+  test("lists numbers the previous index had a mint for, live or burned, that the new one lost", () => {
+    // #2's token was burned and DAS stopped listing it; #3 dropped out of the burned search.
+    const next = build([asset("m1", "Degen Trash Panda #1"), asset("m5", "Degen Trash Panda #5")]);
+    expect(next.missing).toEqual([2, 3, 4]);
+    expect(lostMints(previous, next)).toEqual([
+      { n: 2, mint: "m2" },
+      { n: 3, mint: "m3" },
+    ]);
+  });
+
+  test("nothing is lost when the new index still has everything", () => {
+    expect(lostMints(previous, previous)).toEqual([]);
   });
 });

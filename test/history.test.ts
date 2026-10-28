@@ -369,6 +369,13 @@ describe("API", () => {
     expect((await b.mint(MINT_6872)).status).toBe(200);
   });
 
+  test("GET /api/stats counts the index", async () => {
+    const body = await (await api()).stats().json();
+    // #6872 live, #7 on two mints (a duplicate), every other number up to #6872 missing.
+    expect(body).toMatchObject({ numbers: 6872, live: 1, burned: 0, generatedAt: "2026-10-20T00:00:00.000Z" });
+    expect((body as { missing: number[] }).missing).toHaveLength(6870);
+  });
+
   test("GET /api/random picks a number from the index", async () => {
     const a = await api();
     const res = a.random(() => 0.5);

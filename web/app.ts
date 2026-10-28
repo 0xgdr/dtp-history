@@ -3,6 +3,7 @@
 import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
 import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
+import type { Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
 import { readTraits } from "../src/traits.ts";
 
@@ -178,8 +179,8 @@ function renderWelcome(): HTMLElement {
   );
 }
 
-// The collection's own history, as read from the chain while building this. Counts are from the
-// index (data/panda-index.json) as of October 2026.
+// The collection's own history, as read from the chain while building this. The live counts come
+// from /api/stats; the story's own numbers are history and don't change.
 const STORY: { when: string; title: string; text: string; examples: string[]; tone?: "exalted" | "immortal" | "burned" }[] = [
   {
     when: "22 Nov 2021",
@@ -229,19 +230,39 @@ const STORY: { when: string; title: string; text: string; examples: string[]; to
   {
     when: "2022–2026",
     title: "Burned",
-    text: "28 Pandas have been burned. Two owners burned just the token, which leaves the metadata behind and hides the Panda from most indexers.",
+    text: "Pandas get burned now and then. Some owners burned just the token, which leaves the metadata behind and hides the Panda from most indexers.",
     examples: ["13868", "8669"],
     tone: "burned",
   },
 ];
 
 function renderStory(): HTMLElement {
-  const stat = (value: string, label: string) => h("div", { class: "stat" }, h("dt", {}, label), h("dd", {}, value));
+  const tiles = { numbers: "numbers", live: "live", burned: "burned", missing: "never found" } as const;
+  const values = Object.fromEntries(Object.keys(tiles).map((k) => [k, h("dd", {}, "–")])) as Record<keyof typeof tiles, HTMLElement>;
+  const foot = h("p", { class: "story-foot" });
+  void fetch("/api/stats")
+    .then((res) => (res.ok ? (res.json() as Promise<Stats>) : null))
+    .then((stats) => {
+      if (!stats) return;
+      const fmt = (n: number) => n.toLocaleString("en-GB");
+      values.numbers.textContent = fmt(stats.numbers);
+      values.live.textContent = fmt(stats.live);
+      values.burned.textContent = fmt(stats.burned);
+      values.missing.textContent = fmt(stats.missing.length);
+      const built = longDate(Date.parse(stats.generatedAt) / 1000);
+      const missing = stats.missing.map((n) => `#${n}`);
+      foot.textContent = `${missing.length ? `No one has found a Panda for ${listJoin(missing)}. ` : ""}Counts from the index built on ${built}.`;
+    })
+    .catch(() => {});
   return h(
     "section",
     { class: "story", "aria-labelledby": "story-title" },
     h("h2", { id: "story-title" }, "The collection, from the chain"),
-    h("dl", { class: "stats" }, stat("20,000", "numbers"), stat("19,965", "live"), stat("28", "burned"), stat("7", "never found")),
+    h(
+      "dl",
+      { class: "stats" },
+      ...Object.entries(tiles).map(([k, label]) => h("div", { class: "stat" }, h("dt", {}, label), values[k as keyof typeof tiles])),
+    ),
     h(
       "ol",
       { class: "story-list" },
@@ -256,11 +277,7 @@ function renderStory(): HTMLElement {
         ),
       ),
     ),
-    h(
-      "p",
-      { class: "story-foot" },
-      "Seven numbers between #10596 and #13014 have no Panda anyone can find yet. Counts as of October 2026.",
-    ),
+    foot,
   );
 }
 

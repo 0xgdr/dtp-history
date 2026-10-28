@@ -79,6 +79,7 @@ export const options = serveOptions({
     "/api/panda/:n": { GET: (req) => api.panda(req.params.n) },
     "/api/mint/:mint": { GET: (req) => api.mint(req.params.mint) },
     "/api/random": { GET: () => api.random() },
+    "/api/stats": { GET: () => api.stats() },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
   development: !production && { hmr: true, console: true },

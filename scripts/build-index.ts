@@ -4,11 +4,13 @@
 // at a DAS-capable endpoint (e.g. Helius). The URL and key are never written to the file.
 //
 // DAS leaves out of every listing a Panda whose token was burned with a plain token burn (supply 0,
-// metadata left behind), so those are listed by hand in data/extra-mints.json and fetched by id.
+// metadata left behind). Those are kept in data/extra-mints.json and fetched by id. Any number the
+// previous index had but this build lost is looked up by id too, and added to that file if found,
+// so a Panda burned this way between builds becomes burned instead of missing.
 import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
-import { buildIndex, type DasAsset } from "../src/index-lookup.ts";
-import { createRpc } from "../src/rpc.ts";
+import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/index-lookup.ts";
+import { createRpc, RpcError } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
 const EXTRA = `${import.meta.dir}/../data/extra-mints.json`;
@@ -42,15 +44,39 @@ for (const creator of DTP_CREATORS) {
   assets.push(...(await pageAll("searchAssets", { creatorAddress: creator, creatorVerified: true, burnt: true })));
 }
 
-const extra = (await Bun.file(EXTRA).json()) as { mint: string; note: string }[];
-for (const { mint } of extra) {
+// DAS still knows a delisted Panda by id. An NFT's supply is 1: 0 means the token was burned, and a
+// closed mint account (-32602) has no supply left at all.
+async function byId(mint: string): Promise<DasAsset> {
   const asset = await rpc.call<DasAsset>("getAsset", { id: mint });
-  const supply = await rpc.call<{ value: { amount: string } }>("getTokenSupply", [mint]);
-  assets.push({ ...asset, burnt: asset.burnt || supply.value.amount === "0" });
+  let supply: string | null = null;
+  try {
+    supply = (await rpc.call<{ value: { amount: string } }>("getTokenSupply", [mint])).value.amount;
+  } catch (err) {
+    if (!(err instanceof RpcError && err.message.includes("-32602"))) throw err;
+  }
+  return { ...asset, burnt: asset.burnt || supply !== "1" };
 }
+
+const extra = (await Bun.file(EXTRA).json()) as { mint: string; note: string }[];
+for (const { mint } of extra) assets.push(await byId(mint));
 console.log(`extra mints: ${extra.length}`);
 
-const index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, new Date().toISOString());
+const generatedAt = new Date().toISOString();
+let index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, generatedAt);
+
+const previous = (await Bun.file(OUT).exists()) ? ((await Bun.file(OUT).json()) as PandaIndex) : null;
+const lost = previous ? lostMints(previous, index) : [];
+if (lost.length) {
+  for (const { mint } of lost) assets.push(await byId(mint));
+  index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, generatedAt);
+  for (const { n, mint } of lost) {
+    const found = index.pandas[n] === mint || index.burned[n] === mint;
+    console.log(`#${n} was in the last index but not listed by DAS: ${found ? "found by id" : "still missing"} (${mint})`);
+    if (found) extra.push({ mint, note: `#${n}, found by id on ${generatedAt.slice(0, 10)}` });
+  }
+  await Bun.write(EXTRA, `${JSON.stringify(extra, null, 2)}\n`);
+}
+
 await Bun.write(OUT, `${JSON.stringify(index)}\n`);
 console.log(
   `count ${index.count}, duplicates ${Object.keys(index.duplicates).length}, burned ${Object.keys(index.burned).length}, ` +
