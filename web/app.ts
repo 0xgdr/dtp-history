@@ -174,7 +174,14 @@ function renderWelcome(): HTMLElement {
       {},
       "Enter a Degen Trash Panda number to compare its art & six traits today with the day it was minted.",
     ),
-    h("p", {}, "Try ", lookupLink("15700", "#15700"), " or ", randomLink(), "."),
+    h(
+      "p",
+      { class: "try" },
+      "Try ", // the spaces are for screen readers; flex lays the pills out with a gap
+      lookupLink("15700", "#15700", { class: "try-pill" }),
+      " or ",
+      randomLink({ class: "try-pill outline" }),
+    ),
     renderStory(),
   );
 }
@@ -649,7 +656,7 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
   const swaps = step.diff.filter((c) => c.tag === "swap");
   const cosmetic = step.diff.filter((c) => c.tag === "cosmetic");
   const artChanged = swaps.some((c) => c.path === "image");
-  // Being exalted changed the background art: say so, in gold rather than red.
+  // Being exalted changed the background art: say so, in the exalted colour rather than red.
   const exaltArt = artChanged && swaps.length === 1 && addsExalted(step.diff, exalted);
   const others = listJoin(
     unique(cosmeticPhrases(cosmetic, exalted)).filter(
@@ -837,8 +844,8 @@ async function lookupRandom(): Promise<void> {
   }
 }
 
-function randomLink(): HTMLElement {
-  const a = h("a", { href: "#", role: "button" }, "a random Panda");
+function randomLink(attrs: Record<string, string> = {}): HTMLElement {
+  const a = h("a", { href: "#", role: "button", ...attrs }, "a random Panda");
   a.addEventListener("click", (event) => {
     event.preventDefault();
     lookupRandom();

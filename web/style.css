@@ -14,7 +14,7 @@
   --band: #0a1a13; /* green-black: a soft step into the page green (the header logo is transparent) */
   --sticker: #f2c230;
   --sticker-ink: #1d1a0a;
-  --gold: #f2c230; /* exalted */
+  --exalted: #b8ff2e; /* toxic lime: exalting is naughty */
   --immortal: #c9a8ff;
   --ok: #6fd39b;
   --bad: #ff7a6b;
@@ -183,6 +183,40 @@ main {
   max-width: 34em;
 }
 
+/* "Try #15700 or a random Panda": two sticker pills, so the way in is obvious. */
+.welcome > p.try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  font-weight: 600;
+}
+
+.try-pill {
+  padding: 8px 18px 9px;
+  color: var(--sticker-ink);
+  background: var(--sticker);
+  border: 2px solid var(--sticker);
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 120ms ease;
+}
+
+.try-pill.outline {
+  color: var(--sticker);
+  background: transparent;
+}
+
+.try-pill:hover {
+  transform: translateY(-2px) rotate(-1.5deg);
+}
+
+.try-pill:active {
+  transform: translateY(1px);
+}
+
 /* The collection's history on the home page: a stat strip, then a timeline down a bin-black rail. */
 
 .story {
@@ -288,7 +322,7 @@ main {
 }
 
 .story-item.exalted {
-  --accent: var(--gold);
+  --accent: var(--exalted);
 }
 
 .story-item.immortal {
@@ -634,7 +668,7 @@ main {
 }
 
 .exalted {
-  --stamp: var(--gold);
+  --stamp: var(--exalted);
 }
 
 @keyframes stamp {
@@ -897,13 +931,13 @@ figcaption {
 }
 
 .step.has-exalt .step-summary {
-  color: var(--gold);
+  color: var(--exalted);
 }
 
 .step.has-exalt .chip.swap {
   color: var(--sticker-ink);
-  background: var(--sticker);
-  border-color: var(--sticker);
+  background: var(--exalted);
+  border-color: var(--exalted);
 }
 
 .collection-event > .event-row {
