@@ -14,6 +14,7 @@ chain. Counts are as of 28 October 2026.
 | `data/original-mints.json` | Every mint the original candy machine made, in mint order | `scripts/find-unlisted-mints.ts` | ~16,000 calls, ~50 min; never needs re-running |
 | `data/metadata-snapshot.json` | Every Panda's on-chain metadata URI and collection status | `scripts/snapshot-metadata.ts` | ~200 calls |
 | `data/mint-traits.json` | Every Panda's six traits, art and date on mint day | `scripts/mint-traits.ts` | ~40,000 calls + 20,000 Arweave fetches, ~2½ hours; never needs re-running |
+| `data/art-uploads.json` | When each art file that isn't a Panda's mint-day file was uploaded | `bun run index` (new files only) | ~35 Arweave index queries the first time |
 
 ## The numbers
 
@@ -128,23 +129,29 @@ index never picks them, because a Panda must be in a DTP collection or carry a v
 `data/mint-traits.json` has every Panda's six traits and art as minted, read from the Create
 instruction in its metadata account's first transaction and the file it points at.
 
-A grid Panda gets **✓ Original** when it's untouched since mint, as its own page would say: all six
-traits match the mint **and** its image is the very same file (an Arweave id always returns the same
-data, so the same id proves the art didn't change). Traits alone aren't enough: **#275**'s traits
-are exactly as minted, but its art was redrawn in October 2026 (a printed hoodie added under the
-Denim Vest on 12 October, the vest gone on 14 October) with its traits left saying "Denim Vest". Its
-page says "Swapped since mint".
+A grid Panda gets **✓ Original** when it was **never put through the Boots trait swap**: its current
+art is the mint-day file, or a file uploaded in 2021 (an exalt, or a mint-week fix like #12's Body on
+23 November 2021). Boots changes only ever show as art uploaded later (`data/art-uploads.json` has
+each file's upload date from Arweave's index). An Arweave id always returns the same data, so the
+file says whether the art changed; traits alone don't. **#275**'s Boots hoodie changed its art but
+not its six traits, which still say "Denim Vest". The swap itself was in the Shadow Drive years, so
+it first shows in the October 2026 move to ArDrive, which saved each Panda's art as it then was.
 
-| Grid | ✓ Original | Why the rest aren't |
-|---|---|---|
-| Immortals (2,395) | 2,395 | — |
-| Burned (35) | 30 | 5 have art lost to Shadow Drive |
-| Off the collection (6) | 3 (#1636, #5642, #10305) | #378 Exalted, #536 Swapped (as their pages say); #15639 lost |
-| Exalted (693) | 0 | exalting changed their art (pages say "Exalted" or "Swapped") |
-| Un-exalted (9) | 0 | all 9 swapped |
+How it was checked: all 700 exalted and un-exalted Pandas were split by when their current art was
+uploaded and whether their traits changed. The 39 with Boots-era art but traits as minted had their
+histories built, and every one's art had really changed (no re-uploads). Of the 2,425 grid Pandas
+still on their mint-day art, none has different traits.
 
-Not yet told apart: exalted Pandas whose only change is the exalt from ones like #275 whose art was
-changed again later. That needs each one's history.
+| Grid | ✓ Original | Boots | Unknown |
+|---|---|---|---|
+| Exalted (693) | 521 (468 exalt only, 53 mint-week fixes) | 170 | 2 (art lost) |
+| Un-exalted (9) | 0 | 9 | 0 |
+| Off the collection (6) | 5 | 0 | 1 (#15639) |
+| Immortals (2,395) | 2,395 | 0 | 0 |
+| Burned (35) | 30 | 0 | 5 (art lost) |
+
+So "original" here isn't the Panda page's "Untouched since mint": an exalted Panda can be original
+(its page says "Exalted"), and so can one with a 2021 fix (#536's page says "Swapped").
 
 #275 also shows its mint-day metadata didn't match its art: Background "Yellow", art blue.
 
