@@ -403,19 +403,19 @@ const LISTS: { kind: ListKind; title: string; link: string; intro: string }[] = 
   {
     kind: "unverified",
     title: "Off the collection",
-    link: "See every Panda off the collection",
+    link: "See every off-collection Panda",
     intro: "Pandas in neither collection as verified. Most were moved to the Immortal collection without being verified there; their DTP creator still proves they're genuine.",
   },
   {
     kind: "lost",
     title: "Still lost to Shadow Drive",
-    link: "See the Pandas still lost",
+    link: "See every lost Panda",
     intro: "Pandas whose metadata or art still points at GenesysGo Shadow Drive, which is gone. Many more lost part of their history there and later moved off it; they aren't listed.",
   },
   {
     kind: "immortal",
     title: "The Immortals",
-    link: "See all the Immortals",
+    link: "See every Immortal Panda",
     intro: "Minted on 27–28 June 2023 into the numbers the drop never reached, in the Immortal Degenerate Trash Pandas collection.",
   },
   {
