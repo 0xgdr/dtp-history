@@ -424,6 +424,131 @@ main {
   font-size: 0.9375rem;
 }
 
+.story-text p.story-list-link {
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+.story-list-link a {
+  color: var(--accent);
+}
+
+/* The grids: every exalted, Immortal or burned Panda. The page takes its colour from the kind. */
+.grid-page {
+  --accent: var(--ink);
+}
+
+.grid-page.exalted {
+  --accent: var(--exalted);
+}
+
+.grid-page.immortal {
+  --accent: var(--immortal);
+}
+
+.grid-page.burned {
+  --accent: var(--bad);
+}
+
+.grid-back {
+  display: inline-block;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.grid-head h1 {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.05;
+}
+
+.grid-intro {
+  margin: 0;
+  max-width: 40em;
+}
+
+.grid-count {
+  margin: 8px 0 24px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.panda-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid-panda a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.grid-card {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.grid-panda a:hover .grid-card {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+
+.grid-card .thumb {
+  margin-bottom: 6px;
+}
+
+.grid-n {
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  font-feature-settings: "tnum";
+}
+
+.grid-stat {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+/* Burned: greyed like on its own page, with a small red stamp on the art. */
+.grid-panda.burned .thumb-img {
+  filter: grayscale(1) brightness(0.7);
+}
+
+.grid-panda.burned .grid-n {
+  color: var(--muted);
+}
+
+.grid-burned {
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  padding: 1px 6px 2px;
+  color: var(--bad);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border: 2px double var(--bad);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transform: rotate(-8deg);
+}
+
 .story-foot {
   margin: 4px 0 0;
   color: var(--muted);
@@ -635,11 +760,16 @@ main {
   }
 }
 
+/* Not the history's .empty box: no top margin, and the thumb's own background. */
 .thumb.empty {
   display: grid;
   place-items: center;
+  margin-top: 0;
+  padding: 8px;
   color: var(--muted);
+  background: var(--line);
   font-size: 0.875rem;
+  text-align: center;
 }
 
 .stamp {
@@ -1082,6 +1212,11 @@ pre {
 @media (max-width: 720px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panda-grid {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 10px;
   }
 
   .story-list {

@@ -10,10 +10,12 @@
 import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
 import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/index-lookup.ts";
+import { buildLists } from "../src/lists.ts";
 import { createRpc, RpcError } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
 const EXTRA = `${import.meta.dir}/../data/extra-mints.json`;
+const LISTS = `${import.meta.dir}/../data/lists.json`;
 const LIMIT = 1000;
 
 if (!Bun.env.RPC_URL) {
@@ -78,10 +80,25 @@ if (lost.length) {
 }
 
 await Bun.write(OUT, `${JSON.stringify(index)}\n`);
+const lists = buildLists(assets, index);
+// DAS hasn't read every Panda's metadata file, so for the few without an image, read it here.
+const jsonUri = new Map(assets.map((a) => [a.id, a.content?.json_uri]));
+for (const entry of new Set(Object.values(lists).flatMap((l) => (Array.isArray(l) ? l : [])))) {
+  const uri = entry.image === null ? jsonUri.get(entry.mint) : undefined;
+  if (!uri) continue;
+  try {
+    const json = (await (await fetch(uri, { signal: AbortSignal.timeout(15_000) })).json()) as { image?: unknown };
+    if (typeof json.image === "string" && /^https?:\/\//.test(json.image)) entry.image = json.image;
+  } catch {
+    console.log(`#${entry.n}: no image (${uri} unreadable)`);
+  }
+}
+await Bun.write(LISTS, `${JSON.stringify(lists)}\n`);
 console.log(
   `count ${index.count}, duplicates ${Object.keys(index.duplicates).length}, burned ${Object.keys(index.burned).length}, ` +
     `missing ${index.missing.length}, unparsed ${index.unparsed.length}`,
 );
+console.log(`lists: exalted ${lists.exalted.length}, immortal ${lists.immortal.length}, burned ${lists.burned.length}`);
 if (index.count < 10_000) {
   console.error(`count ${index.count} is below 10000: paging probably failed`);
   process.exit(1);
