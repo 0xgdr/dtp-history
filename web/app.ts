@@ -486,10 +486,15 @@ function renderGridPanda(p: ListEntry): HTMLElement {
             ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive")
             : thumb(thumbUrl(p.image), name, "grid-img"),
         p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
-        p.original
-          ? h("span", { class: "grid-original", title: "All six traits match the mint (the art may still differ, e.g. when exalted)" }, "✓ Original")
-          : "",
-        h("span", { class: "grid-n" }, `#${p.n}`),
+        // The number, and beside it whether all six traits are still as minted.
+        h(
+          "span",
+          { class: "grid-title" },
+          h("span", { class: "grid-n" }, `#${p.n}`),
+          p.original
+            ? h("span", { class: "grid-original", title: "All six traits match the mint (the art may still differ, e.g. when exalted)" }, "✓ Original")
+            : "",
+        ),
         p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
         p.note ? h("span", { class: "grid-stat" }, p.note) : "",
         lost && p.lastArt
