@@ -62,6 +62,17 @@ describe("thumbs", () => {
     expect(calls).toEqual([ARDRIVE]);
   });
 
+  test("format=jpeg makes a JPEG, cached apart from the WebP", async () => {
+    const cache = memoryCache();
+    const { fetchImpl, calls } = fakeFetch();
+    const thumb = createThumbs({ cache, fetchImpl });
+    const jpeg = await thumb(SRC, "jpeg");
+    expect(jpeg.headers.get("content-type")).toBe("image/jpeg");
+    expect((await new Bun.Image(await jpeg.bytes()).metadata()).format).toBe("jpeg");
+    expect((await thumb(SRC)).headers.get("content-type")).toBe("image/webp");
+    expect(calls).toHaveLength(2);
+  });
+
   test("concurrent requests share one fetch", async () => {
     const { fetchImpl, calls } = fakeFetch();
     const thumb = createThumbs({ cache: memoryCache(), fetchImpl });

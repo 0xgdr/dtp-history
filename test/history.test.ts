@@ -369,6 +369,22 @@ describe("API", () => {
     expect((await b.mint(MINT_6872)).status).toBe(200);
   });
 
+  test("a share card comes from the cached history only, never a build", async () => {
+    const { rpc, calls } = await fixtureRpc();
+    const a = createApi({ rpc, fetcher: await fixtureFetcher(), cache: memoryCache(), index });
+    // Not built yet: the number, the site's image, and no RPC call.
+    expect(await a.shareCard("6872")).toMatchObject({ title: "Degen Trash Panda #6872 · Trash Panda Check", image: null });
+    expect(calls).toEqual([]);
+    expect(await a.shareCard("abc")).toBeNull();
+    expect(await a.shareCard("100")).toBeNull();
+
+    await a.panda("6872");
+    const card = await a.shareCard("%236872");
+    expect(card?.title).toBe("Degen Trash Panda #6872: Untouched since mint");
+    expect(card?.description).toBe("The art and all six traits match the mint. Minted 23 November 2021.");
+    expect(card?.image).toStartWith("/thumb?src=https%3A%2F%2F");
+  });
+
   test("GET /api/stats counts the index", async () => {
     const body = await (await api()).stats().json();
     // #6872 live, #7 on two mints (a duplicate), every other number up to #6872 missing.

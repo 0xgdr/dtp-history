@@ -10,6 +10,8 @@ const MAX_PIXELS = 8192 * 8192;
 const CACHE_HEADERS = { "cache-control": "public, max-age=31536000, s-maxage=31536000, immutable" };
 const ATTEMPT_MS = 20_000;
 
+export type ThumbFormat = "webp" | "jpeg";
+
 // Where to fetch an image from, in order. Arweave addresses are content hashes that any Arweave
 // gateway serves, and arweave.net can fail on a file ArDrive serves in seconds (#15639's art: 572
 // after 50 s, against 200 in 3 s), so for either host try the other too, ArDrive first.
@@ -35,7 +37,7 @@ export function createThumbs({ cache, fetchImpl = fetch }: { cache: Cache; fetch
     return bytes;
   }
 
-  async function make(src: string): Promise<Uint8Array<ArrayBuffer>> {
+  async function make(src: string, format: ThumbFormat): Promise<Uint8Array<ArrayBuffer>> {
     const failures: string[] = [];
     let bytes: Uint8Array | null = null;
     for (const url of sourcesFor(src)) {
@@ -47,32 +49,34 @@ export function createThumbs({ cache, fetchImpl = fetch }: { cache: Cache; fetch
       }
     }
     if (!bytes) throw new Error(failures.join("; "));
-    const webp = await new Bun.Image(bytes, { maxPixels: MAX_PIXELS })
-      .resize(SIZE, SIZE, { fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .blob();
-    return new Uint8Array(await webp.arrayBuffer());
+    const resized = new Bun.Image(bytes, { maxPixels: MAX_PIXELS }).resize(SIZE, SIZE, { fit: "inside", withoutEnlargement: true });
+    const out = await (format === "jpeg" ? resized.jpeg({ quality: 85 }) : resized.webp({ quality: 80 })).blob();
+    return new Uint8Array(await out.arrayBuffer());
   }
 
-  return async function thumb(src: string | null): Promise<Response> {
+  // WebP for the page's tiles; JPEG for share cards, since some crawlers (Facebook's, LinkedIn's)
+  // only take JPEG, PNG or GIF.
+  return async function thumb(src: string | null, format: ThumbFormat = "webp"): Promise<Response> {
     if (!src || !thumbSourceOk(src)) {
       return Response.json({ error: "bad_input", detail: "src must be an https Arweave or ArDrive image" }, { status: 400 });
     }
-    const key = new Bun.CryptoHasher("sha256").update(src).digest("hex");
+    const hash = new Bun.CryptoHasher("sha256").update(src).digest("hex");
+    const key = format === "jpeg" ? `${hash}-jpeg` : hash;
+    const type = `image/${format}`;
     const cached = await cache.getBytes("thumb", key);
-    if (cached) return new Response(cached, { headers: { "content-type": "image/webp", ...CACHE_HEADERS } });
+    if (cached) return new Response(cached, { headers: { "content-type": type, ...CACHE_HEADERS } });
 
     let pending = inflight.get(key);
     if (!pending) {
-      pending = make(src).then(async (bytes) => {
-        await cache.setBytes("thumb", key, bytes, "image/webp");
+      pending = make(src, format).then(async (bytes) => {
+        await cache.setBytes("thumb", key, bytes, type);
         return bytes;
       });
       inflight.set(key, pending);
       void pending.finally(() => inflight.delete(key)).catch(() => {});
     }
     try {
-      return new Response(await pending, { headers: { "content-type": "image/webp", ...CACHE_HEADERS } });
+      return new Response(await pending, { headers: { "content-type": type, ...CACHE_HEADERS } });
     } catch (err) {
       console.warn(`thumb ${src}: ${err instanceof Error ? err.message : err}`);
       // Not cached: the source may be back later.

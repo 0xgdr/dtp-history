@@ -67,7 +67,8 @@ if (production) {
 // "/" serves the page with the share-card URLs filled in.
 async function page(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const html = await withShareTags(await pageHtml(req), siteOrigin(req, config.publicUrl), url.pathname + url.search);
+  const card = await api.shareCard(url.searchParams.get("n"));
+  const html = await withShareTags(await pageHtml(req), siteOrigin(req, config.publicUrl), url.pathname + url.search, card);
   return new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } });
 }
 
@@ -87,7 +88,12 @@ export const options = serveOptions({
     "/api/random": { GET: () => api.random() },
     "/api/stats": { GET: () => api.stats() },
     "/api/list/:kind": { GET: (req) => api.list(req.params.kind) },
-    "/thumb": { GET: (req) => thumbs(new URL(req.url).searchParams.get("src")) },
+    "/thumb": {
+      GET: (req) => {
+        const params = new URL(req.url).searchParams;
+        return thumbs(params.get("src"), params.get("format") === "jpeg" ? "jpeg" : "webp");
+      },
+    },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
   development: !production && { hmr: true, console: true },
