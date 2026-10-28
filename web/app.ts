@@ -361,8 +361,8 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
         h("h3", {}, e.title),
         h("p", {}, e.text),
         h("p", { class: "story-see" }, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
-        e.list ? h("p", { class: "story-list-link" }, listLink(e.list)) : "",
       ),
+      e.list ? h("p", { class: "story-list-link" }, listLink(e.list)) : "",
     ),
   );
 }

@@ -429,9 +429,16 @@ main {
   font-size: 0.9375rem;
 }
 
-.story-text p.story-list-link {
-  margin-top: 10px;
-  font-weight: 700;
+/* "See every…" sits in its own column at the right of the card. */
+.story-card:has(.story-list-link) {
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+}
+
+.story-list-link {
+  align-self: center;
+  margin: 0;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .story-list-link a {
@@ -485,10 +492,13 @@ main {
   font-size: 0.9375rem;
 }
 
+/* At most five across, and every card as tall as the tallest, so a two-line stat doesn't
+   stagger the rows. */
 .panda-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -496,6 +506,7 @@ main {
 
 .grid-panda a {
   display: block;
+  height: 100%;
   color: inherit;
   text-decoration: none;
 }
@@ -503,8 +514,10 @@ main {
 .grid-card {
   position: relative;
   display: grid;
+  align-content: start;
   gap: 2px;
-  padding: 8px 8px 10px;
+  height: 100%;
+  padding: 10px 10px 12px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -521,6 +534,7 @@ main {
 }
 
 .grid-n {
+  font-size: 1.125rem;
   font-weight: 900;
   font-variation-settings: "wdth" 112;
   font-feature-settings: "tnum";
@@ -528,7 +542,7 @@ main {
 
 .grid-stat {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.3;
 }
 
@@ -1223,14 +1237,33 @@ pre {
   }
 }
 
+@media (max-width: 900px) {
+  .panda-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panda-grid {
-    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .grid-n {
+    font-size: 1rem;
+  }
+
+  .story-card:has(.story-list-link) {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+
+  .story-list-link {
+    grid-column: 2;
+    white-space: normal;
   }
 
   .story-list {
