@@ -364,7 +364,7 @@ function renderStoryEntry(e: StoryEntry): HTMLElement {
       h(
         "figure",
         { class: "story-art" },
-        lookupLink(e.art.n, thumb(thumbUrl(e.art.image), name, "story-img"), { "aria-label": name }),
+        thumb(thumbUrl(e.art.image), name, "story-img"),
         h("span", { class: "story-stamp", "aria-hidden": "true" }, e.stamp),
       ),
       h(
