@@ -1,7 +1,7 @@
-// Compares data/panda-index.json and data/lists.json with the committed ones and prints a Markdown
-// summary of what changed, for the scheduled rebuild's PR (.github/workflows/rebuild-index.yml). A
-// rebuild that only moved generatedAt is no change. Under GitHub Actions it also sets the step
-// output `changed`.
+// Compares data/panda-index.json, data/lists.json and data/metadata-snapshot.json with the committed
+// ones and prints a Markdown summary of what changed, for the scheduled rebuild's PR
+// (.github/workflows/rebuild-index.yml). A rebuild that only moved generatedAt is no change. Under
+// GitHub Actions it also sets the step output `changed`.
 import { $ } from "bun";
 import type { PandaIndex } from "../src/index-lookup.ts";
 
@@ -35,7 +35,16 @@ const listSizes = (l: Lists | null) =>
   l ? Object.entries(l).filter(([, v]) => Array.isArray(v)).map(([k, v]) => `${k} ${(v as unknown[]).length}`).join(", ") : "none";
 const listsChanged = withoutDate(listsBefore) !== withoutDate(listsAfter);
 
-const changed = listsChanged || moved.length > 0 || JSON.stringify(b) !== JSON.stringify(a);
+// The metadata snapshot: a Panda whose metadata moved (a trait swap, a re-host) shows here first.
+type Snapshot = { hosts?: Record<string, number>; pandas: Record<string, unknown> };
+const SNAPSHOT = "data/metadata-snapshot.json";
+const snapBefore = (await $`git show HEAD:${SNAPSHOT}`.nothrow().quiet()).exitCode === 0 ? (JSON.parse(await $`git show HEAD:${SNAPSHOT}`.text()) as Snapshot) : null;
+const snapAfter = (await Bun.file(`${import.meta.dir}/../${SNAPSHOT}`).exists()) ? ((await Bun.file(`${import.meta.dir}/../${SNAPSHOT}`).json()) as Snapshot) : null;
+const metadataMoved = Object.keys({ ...snapBefore?.pandas, ...snapAfter?.pandas })
+  .filter((n) => JSON.stringify(snapBefore?.pandas[n]) !== JSON.stringify(snapAfter?.pandas[n]))
+  .sort((x, y) => Number(x) - Number(y));
+
+const changed = listsChanged || metadataMoved.length > 0 || moved.length > 0 || JSON.stringify(b) !== JSON.stringify(a);
 
 const lines = [
   "| | before | after |",
@@ -45,6 +54,10 @@ const lines = [
   moved.length ? `${moved.length} number(s) changed:\n\n| Panda | before | after |\n|---|---|---|\n${moved.join("\n")}` : "No number changed status.",
   "",
   listsChanged ? `Grids changed: ${listSizes(listsBefore)} → ${listSizes(listsAfter)}.` : "Grids unchanged.",
+  "",
+  metadataMoved.length
+    ? `On-chain metadata changed for ${metadataMoved.length} Panda(s): ${metadataMoved.slice(0, 50).map((n) => `#${n}`).join(", ")}${metadataMoved.length > 50 ? ", …" : ""}. Hosts now: ${JSON.stringify(snapAfter?.hosts ?? {})}.`
+    : "On-chain metadata unchanged.",
 ];
 console.log(lines.join("\n"));
 

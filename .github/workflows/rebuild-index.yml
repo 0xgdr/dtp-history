@@ -1,5 +1,6 @@
-# Rebuilds data/panda-index.json every Monday and opens a PR when anything other than generatedAt
-# changed. Merging the PR deploys the new index. Needs the repo secret RPC_URL (a DAS-capable
+# Rebuilds data/panda-index.json and data/lists.json, and re-reads every Panda's metadata account
+# into data/metadata-snapshot.json, every Monday, and opens a PR when anything other than
+# generatedAt changed. Merging the PR deploys the new index. Needs the repo secret RPC_URL (a DAS-capable
 # endpoint, e.g. Helius), and "Allow GitHub Actions to create and approve pull requests" turned on
 # under Settings → Actions → General.
 #
@@ -39,6 +40,12 @@ jobs:
           RPC_URL: ${{ secrets.RPC_URL }}
           RPC_RPS: "4"
 
+      - name: Snapshot every Panda's on-chain metadata
+        run: bun scripts/snapshot-metadata.ts
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          RPC_RPS: "4"
+
       - name: Compare with the committed index
         id: diff
         run: bun scripts/index-diff.ts | tee "$RUNNER_TEMP/summary.md"
@@ -57,6 +64,7 @@ jobs:
             data/panda-index.json
             data/extra-mints.json
             data/lists.json
+            data/metadata-snapshot.json
           commit-message: Rebuild the Panda index
           title: Rebuild the Panda index
           body-path: ${{ runner.temp }}/summary.md
