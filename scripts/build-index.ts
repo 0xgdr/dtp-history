@@ -7,10 +7,12 @@
 // metadata left behind). Those are kept in data/extra-mints.json and fetched by id. Any number the
 // previous index had but this build lost is looked up by id too, and added to that file if found,
 // so a Panda burned this way between builds becomes burned instead of missing.
-import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
+import { DTP_COLLECTION_MINT, DTP_CREATORS, DTP_IMMORTAL_COLLECTION_MINT } from "../src/constants.ts";
+import { decodeMetadataAccount } from "../src/decode/metadata-account.ts";
+import { metadataPda } from "../src/pda.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
 import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/index-lookup.ts";
-import { buildLists } from "../src/lists.ts";
+import { buildLists, LIST_KINDS } from "../src/lists.ts";
 import { createRpc, RpcError } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
@@ -80,7 +82,21 @@ if (lost.length) {
 }
 
 await Bun.write(OUT, `${JSON.stringify(index)}\n`);
-const lists = buildLists(assets, index);
+// DAS only reports verified collections, so for the few Pandas in neither DTP collection, read the
+// collection their metadata account holds.
+const indexed = new Set([...Object.values(index.pandas), ...Object.values(index.burned)]);
+const offCollection = [...new Set(assets.filter((a) => indexed.has(a.id)).map((a) => a.id))].filter(
+  (id) =>
+    !assets.some(
+      (a) => a.id === id && a.grouping?.some((g) => g.group_key === "collection" && [DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT].includes(g.group_value)),
+    ),
+);
+const collections = new Map<string, string | null>();
+for (const mint of offCollection) {
+  const info = await rpc.call<{ value: { data: [string, string] } | null }>("getAccountInfo", [await metadataPda(mint), { encoding: "base64" }]);
+  collections.set(mint, info.value ? (decodeMetadataAccount(Buffer.from(info.value.data[0], "base64")).collection?.key ?? null) : null);
+}
+const lists = buildLists(assets, index, collections);
 // DAS hasn't read every Panda's metadata file, so for the few without an image, read it here.
 const jsonUri = new Map(assets.map((a) => [a.id, a.content?.json_uri]));
 for (const entry of new Set(Object.values(lists).flatMap((l) => (Array.isArray(l) ? l : [])))) {
@@ -99,7 +115,7 @@ console.log(
     `missing ${index.missing.length}, unparsed ${index.unparsed.length}`,
 );
 console.log(
-  `lists: exalted ${lists.exalted.length}, un-exalted ${lists.unexalted.length}, immortal ${lists.immortal.length}, burned ${lists.burned.length}`,
+  `lists: ${LIST_KINDS.map((k) => `${k} ${lists[k].length}`).join(", ")}`,
 );
 if (index.count < 10_000) {
   console.error(`count ${index.count} is below 10000: paging probably failed`);

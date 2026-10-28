@@ -461,7 +461,8 @@ main {
   --accent: var(--unexalted);
 }
 
-.grid-page.immortal {
+.grid-page.immortal,
+.grid-page.unverified {
   --accent: var(--immortal);
 }
 
