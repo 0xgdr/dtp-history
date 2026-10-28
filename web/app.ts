@@ -270,13 +270,9 @@ function renderHero(r: HistoryResult): HTMLElement {
 
   const notes: string[] = [];
   if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
-  if (r.burned) notes.push("This Panda has been burned: its metadata account no longer exists.");
   const immortal = r.series === "Immortal";
-  for (const w of r.warnings) {
-    if (r.verdict === "Unknown" && w === r.warnings[0]) continue;
-    if (r.burned && w.startsWith("metadata account does not exist")) continue; // said above
-    notes.push(sentence(w));
-  }
+  // A burned Panda's warning says how it was burned (see src/history.ts).
+  for (const w of r.warnings) if (!(r.verdict === "Unknown" && w === r.warnings[0])) notes.push(sentence(w));
 
   return h(
     "section",

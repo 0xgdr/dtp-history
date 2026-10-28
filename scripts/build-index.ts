@@ -2,12 +2,16 @@
 // `getAssetsByCreator` (each verified DTP creator, for Pandas whose collection field is wrong) and
 // `searchAssets` with `burnt` (neither of the others returns burned assets). Needs RPC_URL pointing
 // at a DAS-capable endpoint (e.g. Helius). The URL and key are never written to the file.
+//
+// DAS leaves out of every listing a Panda whose token was burned with a plain token burn (supply 0,
+// metadata left behind), so those are listed by hand in data/extra-mints.json and fetched by id.
 import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
 import { buildIndex, type DasAsset } from "../src/index-lookup.ts";
 import { createRpc } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
+const EXTRA = `${import.meta.dir}/../data/extra-mints.json`;
 const LIMIT = 1000;
 
 if (!Bun.env.RPC_URL) {
@@ -37,6 +41,14 @@ for (const creator of DTP_CREATORS) {
   assets.push(...(await pageAll("getAssetsByCreator", { creatorAddress: creator, onlyVerified: true })));
   assets.push(...(await pageAll("searchAssets", { creatorAddress: creator, creatorVerified: true, burnt: true })));
 }
+
+const extra = (await Bun.file(EXTRA).json()) as { mint: string; note: string }[];
+for (const { mint } of extra) {
+  const asset = await rpc.call<DasAsset>("getAsset", { id: mint });
+  const supply = await rpc.call<{ value: { amount: string } }>("getTokenSupply", [mint]);
+  assets.push({ ...asset, burnt: asset.burnt || supply.value.amount === "0" });
+}
+console.log(`extra mints: ${extra.length}`);
 
 const index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, new Date().toISOString());
 await Bun.write(OUT, `${JSON.stringify(index)}\n`);

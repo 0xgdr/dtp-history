@@ -7,7 +7,7 @@ import { diffChain, diffJson, type Change, type ChainState } from "./diff.ts";
 import { pandaNumber } from "./index-lookup.ts";
 import type { Fetcher } from "./json-fetch.ts";
 import { metadataPda } from "./pda.ts";
-import type { Rpc } from "./rpc.ts";
+import { RpcError, type Rpc } from "./rpc.ts";
 import { imageOf, type Json } from "./traits.ts";
 import { flattenTransaction, type RawTransaction } from "./tx.ts";
 import { displayUrl, normalizeUri } from "./uri.ts";
@@ -90,7 +90,7 @@ export type HistoryResult = {
 
 // Bump when the shape or meaning of HistoryResult changes, so cached histories are rebuilt
 // (cheaply: transactions and JSON stay cached) instead of being served with stale verdicts.
-const HISTORY_VERSION = 4;
+const HISTORY_VERSION = 5;
 
 type CachedHistory = { version?: number; newestSig: string; signatures: SigInfo[]; result: HistoryResult };
 
@@ -121,7 +121,10 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   // 1. Signatures, reusing the cached list when nothing new has happened.
   const cached = await cache.get<CachedHistory>("history", mint);
   const head = await rpc.call<SigInfo[]>("getSignaturesForAddress", [pda, { limit: 1 }]);
-  if (cached && cached.version === HISTORY_VERSION && head[0]?.signature === cached.newestSig) return cached.result;
+  // A token burn doesn't touch the metadata account, so its signatures can't tell; the supply can.
+  const tokenBurned = await isTokenBurned(rpc, mint);
+  const upToDate = cached && cached.version === HISTORY_VERSION && head[0]?.signature === cached.newestSig;
+  if (upToDate && (cached.result.burned || !tokenBurned)) return cached.result;
   const report = deps.onProgress ?? (() => {});
   const fresh = await fetchSignatures(rpc, pda, cached?.newestSig, (n) =>
     report({ phase: "signatures", done: n, total: null }),
@@ -164,7 +167,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
       warnings.push(`metadata account could not be decoded: ${err instanceof Error ? err.message : err}`);
     }
   }
-  const burned = accountInfo.value === null;
+  const burned = accountInfo.value === null || tokenBurned;
 
   // 5. Fold events into states.
   const baselineUncertain = !stateEvents.some((e) => e.kind.startsWith("Create"));
@@ -283,7 +286,8 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
   const finalVerdict: Verdict = exalt?.exalted ? "Exalted" : result.verdict;
 
   warnings.push(...result.warnings);
-  if (burned) warnings.push("metadata account does not exist: the Panda is burned or closed");
+  if (accountInfo.value === null) warnings.push("metadata account does not exist: the Panda is burned or closed");
+  else if (tokenBurned) warnings.push("its token was burned (supply 0), though its metadata is still on chain");
   const verifiedIn = account?.collection?.verified ? account.collection.key : null;
   if (account && verifiedIn !== DTP_COLLECTION_MINT && verifiedIn !== DTP_IMMORTAL_COLLECTION_MINT) {
     const byCreator = account.data.creators?.some((c) => c.verified && (DTP_CREATORS as readonly string[]).includes(c.address));
@@ -293,7 +297,7 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
         : "not a verified Degenerate Trash Panda (collection mismatch)",
     );
   }
-  // A burned Panda has no account, so go by its history too.
+  // A Panda burned through Token Metadata has no account, so go by its history too.
   const immortal =
     verifiedIn === DTP_IMMORTAL_COLLECTION_MINT ||
     (burned && collectionEvents.some((e) => e.action === "verified" && e.collection === DTP_IMMORTAL_COLLECTION_MINT));
@@ -339,6 +343,19 @@ export async function buildHistory(mint: string, deps: Deps): Promise<HistoryRes
     await cache.set("history", mint, { version: HISTORY_VERSION, newestSig, signatures, result: history } satisfies CachedHistory);
   }
   return history;
+}
+
+// Burned with a plain token burn (as #8669 and #8874 were), a Panda keeps its metadata account and
+// only the mint's supply says it's gone.
+async function isTokenBurned(rpc: Rpc, mint: string): Promise<boolean> {
+  try {
+    const supply = await rpc.call<{ value: { amount: string } }>("getTokenSupply", [mint]);
+    return supply.value.amount === "0";
+  } catch (err) {
+    // The mint account is closed: there's no supply to read, and the metadata account decides.
+    if (err instanceof RpcError && err.message.includes("-32602")) return false;
+    throw err;
+  }
 }
 
 // Pages newest to oldest until a short page, or until `stopAt` (the newest cached signature).
