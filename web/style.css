@@ -14,7 +14,8 @@
   --band: #0a1a13; /* green-black: a soft step into the page green (the header logo is transparent) */
   --sticker: #f2c230;
   --sticker-ink: #1d1a0a;
-  --gold: #f2c230; /* exalted */
+  --exalted: #b8ff2e; /* toxic lime: exalting is naughty */
+  --unexalted: color-mix(in srgb, var(--exalted) 45%, var(--muted)); /* the lime, faded */
   --immortal: #c9a8ff;
   --ok: #6fd39b;
   --bad: #ff7a6b;
@@ -178,8 +179,407 @@ main {
 
 /* Welcome, loading, errors */
 
-.welcome {
+.welcome > h1,
+.welcome > p {
   max-width: 34em;
+}
+
+/* "Try #15700 or a random Panda": two sticker pills, so the way in is obvious. */
+.welcome > p.try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  font-weight: 600;
+}
+
+.try-pill {
+  padding: 8px 18px 9px;
+  color: var(--sticker-ink);
+  background: var(--sticker);
+  border: 2px solid var(--sticker);
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.try-pill.outline {
+  color: var(--sticker);
+  background: transparent;
+}
+
+.try-pill:hover {
+  background: color-mix(in srgb, var(--sticker) 82%, white);
+  border-color: color-mix(in srgb, var(--sticker) 82%, white);
+}
+
+.try-pill.outline:hover {
+  background: color-mix(in srgb, var(--sticker) 14%, transparent);
+  border-color: var(--sticker);
+}
+
+.try-pill:active {
+  transform: translateY(1px);
+}
+
+/* The collection's history on the home page: a stat strip, then a timeline down a bin-black rail. */
+
+.story {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 2px solid var(--ink);
+}
+
+.story h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.1;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 32px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  padding: 14px 16px;
+  background: var(--card);
+  border-radius: var(--radius);
+}
+
+.stat dd {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  font-feature-settings: "tnum";
+  line-height: 1.1;
+}
+
+.stat dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* The rail runs down the left of the list; each card hangs a dot on it, and each year sits on it
+   as a big outlined label. */
+.story-list {
+  --rail: 40px;
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--rail);
+}
+
+.story-list::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: linear-gradient(var(--line), var(--line) 85%, transparent);
+}
+
+.story-year {
+  position: relative;
+  margin: 20px 0 10px calc(-1 * var(--rail));
+}
+
+/* Set like a card title, in sticker yellow, with paper behind it so the rail breaks around it. */
+.story-year span {
+  display: inline-block;
+  padding: 4px 10px 4px 0;
+  color: var(--sticker);
+  background: var(--paper);
+  font-size: 1.375rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  font-feature-settings: "tnum";
+  line-height: 1.2;
+}
+
+.story-item {
+  --accent: var(--ink);
+  position: relative;
+  margin: 0 0 16px;
+}
+
+/* The dot, on the rail beside the card's heading. */
+.story-item::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--rail) + 7px);
+  top: 26px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.story-item.exalted {
+  --accent: var(--exalted);
+}
+
+.story-item.unexalted {
+  --accent: var(--unexalted);
+}
+
+.story-item.immortal {
+  --accent: var(--immortal);
+}
+
+.story-item.burned {
+  --accent: var(--bad);
+}
+
+.story-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  padding: 18px 22px 18px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.story-art {
+  position: relative;
+  margin: 0;
+}
+
+.story-art a {
+  display: block;
+  border-radius: var(--radius);
+  transition: transform 160ms ease;
+}
+
+.story-art a:hover {
+  transform: rotate(-2deg) scale(1.03);
+}
+
+.story-item.burned .story-img .thumb-img {
+  filter: grayscale(1) brightness(0.7);
+}
+
+/* The same tilted ink stamp as the verdict on a Panda's page, smaller. */
+.story-stamp {
+  position: absolute;
+  left: -8px;
+  bottom: 10px;
+  padding: 2px 8px 3px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border: 3px double var(--accent);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.story-text {
+  min-width: 0;
+}
+
+.story-when {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.story-item h3 {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 1.375rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.2;
+}
+
+.story-text p {
+  margin: 0;
+  max-width: 40em;
+}
+
+
+/* A footer across the whole card: the example Pandas on the left, "See every…" on the right
+   (under them when there isn't room). */
+.story-foot-links {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.story-list-link {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.story-list-link a {
+  color: var(--accent);
+}
+
+/* The grids: every exalted, Immortal or burned Panda. The page takes its colour from the kind. */
+.grid-page {
+  --accent: var(--ink);
+}
+
+.grid-page.exalted {
+  --accent: var(--exalted);
+}
+
+.grid-page.unexalted {
+  --accent: var(--unexalted);
+}
+
+.grid-page.immortal,
+.grid-page.unverified {
+  --accent: var(--immortal);
+}
+
+.grid-page.burned {
+  --accent: var(--bad);
+}
+
+.grid-back {
+  display: inline-block;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.grid-head h1 {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  line-height: 1.05;
+}
+
+.grid-intro {
+  margin: 0;
+  max-width: 40em;
+}
+
+.grid-count {
+  margin: 8px 0 24px;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+/* At most five across, and every card as tall as the tallest, so a two-line stat doesn't
+   stagger the rows. */
+.panda-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid-panda a {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.grid-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  height: 100%;
+  padding: 10px 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.grid-panda a:hover .grid-card {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+
+.grid-card .thumb {
+  margin-bottom: 6px;
+}
+
+.grid-n {
+  font-size: 1.125rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 112;
+  font-feature-settings: "tnum";
+}
+
+.grid-stat {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+/* Burned: greyed like on its own page, with a small red stamp on the art. */
+.grid-panda.burned .thumb-img {
+  filter: grayscale(1) brightness(0.7);
+}
+
+.grid-panda.burned .grid-n {
+  color: var(--muted);
+}
+
+.grid-burned {
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  padding: 1px 6px 2px;
+  color: var(--bad);
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border: 2px double var(--bad);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  font-variation-settings: "wdth" 75;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transform: rotate(-8deg);
+}
+
+.story-foot {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .welcome h1 {
@@ -387,11 +787,16 @@ main {
   }
 }
 
+/* Not the history's .empty box: no top margin, and the thumb's own background. */
 .thumb.empty {
   display: grid;
   place-items: center;
+  margin-top: 0;
+  padding: 8px;
   color: var(--muted);
+  background: var(--line);
   font-size: 0.875rem;
+  text-align: center;
 }
 
 .stamp {
@@ -426,7 +831,7 @@ main {
 }
 
 .exalted {
-  --stamp: var(--gold);
+  --stamp: var(--exalted);
 }
 
 @keyframes stamp {
@@ -496,6 +901,11 @@ main {
   font-weight: 700;
   border: 1px solid var(--line);
   border-radius: 999px;
+}
+
+.badge.unexalted {
+  color: var(--unexalted);
+  border-color: var(--unexalted);
 }
 
 .badge.immortal {
@@ -689,13 +1099,13 @@ figcaption {
 }
 
 .step.has-exalt .step-summary {
-  color: var(--gold);
+  color: var(--exalted);
 }
 
 .step.has-exalt .chip.swap {
   color: var(--sticker-ink);
-  background: var(--sticker);
-  border-color: var(--sticker);
+  background: var(--exalted);
+  border-color: var(--exalted);
 }
 
 .collection-event > .event-row {
@@ -831,7 +1241,60 @@ pre {
   }
 }
 
+@media (max-width: 900px) {
+  .panda-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panda-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .grid-n {
+    font-size: 1rem;
+  }
+
+  .story-list-link {
+    white-space: normal;
+  }
+
+  .story-list {
+    --rail: 28px;
+  }
+
+  .story-list::before {
+    left: 7px;
+  }
+
+  .story-item::before {
+    left: calc(-1 * var(--rail) + 1px);
+    top: 20px;
+  }
+
+  .story-card {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .story-stamp {
+    left: -6px;
+    bottom: 6px;
+    font-size: 0.6875rem;
+  }
+
+  .story-item h3,
+  .story-year span {
+    font-size: 1.125rem;
+  }
+
   .hero {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;

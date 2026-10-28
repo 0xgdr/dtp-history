@@ -1,0 +1,38 @@
+[
+  {
+    "mint": "CLTq6F1KWwmThRd3ES4vjpRheNZPCMrQpShetfSXD6Eh",
+    "note": "#8669, token burned 2023-08-09"
+  },
+  {
+    "mint": "5h8UyQo7o7XRTvDQyoSG4umfaR2SfFREnu5z5QQJf7JL",
+    "note": "#8874, token burned 2025-07-31"
+  },
+  {
+    "mint": "49uTpHmN5Cy3aQQTAJSEoACZy1DTdeqJpvzm4ugM5rEG",
+    "note": "#10596, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "5EWCRZJqpJdoYYmds81qfwAEGWEtwNScvPWnt13Sv9eR",
+    "note": "#10600, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "24LJpb2AtkJF8rxEspdG8xktd96jdAaJcddNVm9ZKXuE",
+    "note": "#10604, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "7c1J5ziTqf3tCYQD1CT7V86wpSvixgFuGMu6kHG4dba8",
+    "note": "#10605, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "8u2eydqFgDLFhda4EsbRQ12h4qm7GXAodQ5C2VxGbKBq",
+    "note": "#10609, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "GymZZWKapArvUfP5Xzq8cV2hRYV5eQrwPtxTKSFgsPr8",
+    "note": "#11485, token burned; found by scripts/find-unlisted-mints.ts"
+  },
+  {
+    "mint": "FkDhPFhq6bk6Rab441mhC3mSzWfoAjGj4ht9axyjpG9f",
+    "note": "#13014, token burned; found by scripts/find-unlisted-mints.ts"
+  }
+]

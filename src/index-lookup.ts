@@ -56,7 +56,11 @@ export function resolve(index: PandaIndex, n: number): Resolution {
 export type DasAsset = {
   id: string;
   burnt?: boolean;
-  content?: { metadata?: { name?: string } };
+  content?: {
+    metadata?: { name?: string; attributes?: { trait_type: string; value: unknown }[] };
+    links?: { image?: string };
+    json_uri?: string;
+  };
   grouping?: { group_key: string; group_value: string }[];
   creators?: { address: string; verified: boolean }[];
 };
@@ -118,4 +122,15 @@ export function buildIndex(
     missing,
     unparsed,
   };
+}
+
+// Numbers the previous index had a mint for (live or burned) that `next` has lost. DAS drops a Panda
+// from its listings when the token alone is burned, so the build looks these up by id.
+export function lostMints(previous: PandaIndex, next: PandaIndex): { n: number; mint: string }[] {
+  const lost: { n: number; mint: string }[] = [];
+  for (const n of next.missing) {
+    const mint = previous.pandas[n] ?? previous.burned[n];
+    if (mint) lost.push({ n, mint });
+  }
+  return lost;
 }

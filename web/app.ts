@@ -2,8 +2,10 @@
 // traits.ts is tiny and dependency-free, so the page reuses the server's trait matching.
 import { DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT, TRAITS } from "../src/constants.ts";
 import type { Change } from "../src/diff.ts";
-import { addsExalted, EXALTED, exaltedNames } from "../src/exalted.ts";
+import { addsExalted, EXALTED, exaltedNames, isEmptyExaltedStat } from "../src/exalted.ts";
+import type { List, Stats } from "../src/api.ts";
 import type { CollectionEvent, HistoryResult, Step } from "../src/history.ts";
+import { LOST_HOST, type ListEntry, type ListKind } from "../src/lists.ts";
 import { readTraits } from "../src/traits.ts";
 
 type ApiError = { error: string; detail: string; candidates?: string[] };
@@ -20,7 +22,8 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const q = input.value.trim();
   if (!q) return;
-  const url = new URL(location.href);
+  // A fresh query, so a lookup from a grid doesn't keep ?list= in the URL.
+  const url = new URL(location.pathname, location.origin);
   url.searchParams.set("n", q);
   history.pushState(null, "", url);
   load(q);
@@ -28,9 +31,12 @@ form.addEventListener("submit", (event) => {
 
 
 function loadFromUrl(): void {
-  const q = new URLSearchParams(location.search).get("n")?.trim() ?? "";
+  const params = new URLSearchParams(location.search);
+  const q = params.get("n")?.trim() ?? "";
+  const list = LISTS.find((l) => l.kind === params.get("list"));
   input.value = q;
   if (q) load(q);
+  else if (list) loadList(list);
   else result.replaceChildren(renderWelcome());
 }
 
@@ -173,8 +179,323 @@ function renderWelcome(): HTMLElement {
       {},
       "Enter a Degen Trash Panda number to compare its art & six traits today with the day it was minted.",
     ),
-    h("p", {}, "Try ", lookupLink("15700", "#15700"), " or ", randomLink(), "."),
+    h(
+      "p",
+      { class: "try" },
+      "Try ", // the spaces are for screen readers; flex lays the pills out with a gap
+      lookupLink("15700", "#15700", { class: "try-pill" }),
+      " or ",
+      randomLink({ class: "try-pill outline" }),
+    ),
+    renderStory(),
   );
+}
+
+// The collection's own history, as read from the chain while building this. The live counts come
+// from /api/stats; the story's own numbers are history and don't change. Each entry shows one
+// Panda's art, its image URL looked up once with DAS (getAsset), so the home page never has to
+// build a history to draw it.
+type StoryEntry = {
+  year: string;
+  when: string;
+  title: string;
+  stamp: string;
+  text: string;
+  art: { n: string; image: string };
+  examples: string[];
+  tone?: "exalted" | "unexalted" | "immortal" | "burned";
+  list?: ListKind;
+};
+
+const STORY: StoryEntry[] = [
+  {
+    year: "2021",
+    when: "22 Nov",
+    title: "The drop",
+    stamp: "Minted",
+    text: "A Candy Machine loaded with 20,000 Pandas starts minting on the evening of 22 November (UTC). It mints 14,173 of them, then stops.",
+    art: { n: "1", image: "https://arweave.net/iaVc5X5AmXibHvWDs90SMZL-aGh48rcgDD6j3DhTXG8" },
+    examples: ["1", "6872"],
+  },
+  {
+    year: "2021",
+    when: "Late Nov",
+    title: "Exalted",
+    stamp: "Exalted",
+    text: "Days after mint, some early Pandas are exalted. The update that adds the exalted attribute changes their background art too.",
+    art: { n: "55", image: "https://www.arweave.net/odMAVysuwGxXyHH-pj-bhbCFTbIdvcIYYo7fR-KPc3Q?ext=png" },
+    examples: ["55", "118"],
+    tone: "exalted",
+    list: "exalted",
+  },
+  {
+    year: "2022",
+    when: "Jan",
+    title: "A second creator",
+    stamp: "Minted",
+    text: "Minting carries on under a second creator address. About 3,400 more Pandas join the collection this way.",
+    art: { n: "13400", image: "https://www.arweave.net/7QQcHOuMk1YO6ZWLNCgpdDcDosHG5amekDW9bRQIt00?ext=png" },
+    examples: ["13400"],
+  },
+  {
+    year: "2022",
+    when: "20 Apr",
+    title: "The collection is verified",
+    stamp: "Verified",
+    text: "Pandas are verified into the Degenerate Trash Pandas collection on chain. Some get the same verification again and again over the following months.",
+    art: { n: "6872", image: "https://www.arweave.net/KCPnIoNva-EubeDnc6vLZRrlfijdEVN5Pi2-pz8f0ZQ?ext=png" },
+    examples: ["6872", "13400"],
+  },
+  {
+    year: "2022",
+    when: "From Dec",
+    title: "Lost metadata",
+    stamp: "404",
+    text: "Pandas' metadata starts moving to GenesysGo Shadow Drive. Those files are gone now, so part of many Pandas' history can't be read.",
+    art: { n: "14332", image: "https://arweave.net/qeURwoChCJUGq6e8Cx11gv8s28-rddHp25S8fpcVL-w" },
+    examples: ["14332"],
+  },
+  {
+    year: "2022",
+    when: "By 22 Dec",
+    title: "Un-exalted",
+    stamp: "Un-exalted",
+    text: "Nine exalted Pandas get new traits, and their exalted stat now reads \u201cNone\u201d. Their metadata from those weeks was on Shadow Drive and is gone, so the exact day is lost: by 22 December 2022 it had happened.",
+    art: { n: "1020", image: "https://ardrive.net/xK7TFh3q0MZ_RZ_1ThlISFVybbsK5LRpy-dI-RXScx4" },
+    examples: ["29", "1020"],
+    tone: "unexalted",
+    list: "unexalted",
+  },
+  {
+    year: "2023",
+    when: "27–28 Jun",
+    title: "The Immortals",
+    stamp: "Immortal",
+    text: "2,395 Pandas are minted into the numbers the drop never reached, in a collection of their own: Immortal Degenerate Trash Pandas.",
+    art: { n: "14162", image: "https://www.arweave.net/5UmxUDAq3uoT_KxsOw8PQvHy268ND0VBGwGTi5DVaFY?ext=png" },
+    examples: ["14162", "15000"],
+    tone: "immortal",
+    list: "immortal",
+  },
+  {
+    year: "2024",
+    when: "26 Jan",
+    title: "#5642 switches collection",
+    stamp: "Moved",
+    text: "An original from November 2021 is unverified from the main collection and put in the Immortal collection, unverified. #15639 went the same way three days earlier.",
+    art: { n: "5642", image: "https://www.arweave.net/GVKXKVtIOS0rEn1w7lhw1gnpWB2hoWK7nwr_K-JC9D8?ext=png" },
+    examples: ["5642", "15639"],
+    tone: "immortal",
+    list: "unverified",
+  },
+  {
+    year: "2026",
+    when: "Mid-Oct",
+    title: "Back from Shadow Drive",
+    stamp: "Rescued",
+    text: "17,567 Pandas' metadata moves to ArDrive, matching every live Panda verified in the main collection, so their histories can be read again. Two were missed: #15639 and the burned #11485 still point at Shadow Drive.",
+    art: { n: "2026", image: "https://www.arweave.net/Yk9hQgB7QpqZT015s-YVn3b-Hcg8H18KQkfGguHXmHY?ext=png" },
+    examples: ["14332", "15639"],
+    list: "lost",
+  },
+  {
+    year: "Ever since",
+    when: "2022–now",
+    title: "Burned",
+    stamp: "Burned",
+    text: "Pandas get burned now and then. Some owners burned just the token, which leaves the metadata behind and hides the Panda from most indexers.",
+    art: { n: "13868", image: "https://www.arweave.net/PRlEOmWcxPBIukdpYIK9hMQwHm1i50kChq3xMawVfL8?ext=png" },
+    examples: ["13868", "8669", "10596"],
+    tone: "burned",
+    list: "burned",
+  },
+];
+
+function renderStory(): HTMLElement {
+  const tiles = { numbers: "numbers", live: "live", burned: "burned", missing: "never found" } as const;
+  const values = Object.fromEntries(Object.keys(tiles).map((k) => [k, h("dd", {}, "–")])) as Record<keyof typeof tiles, HTMLElement>;
+  const foot = h("p", { class: "story-foot" });
+  void fetch("/api/stats")
+    .then((res) => (res.ok ? (res.json() as Promise<Stats>) : null))
+    .then((stats) => {
+      if (!stats) return;
+      const fmt = (n: number) => n.toLocaleString("en-GB");
+      values.numbers.textContent = fmt(stats.numbers);
+      values.live.textContent = fmt(stats.live);
+      values.burned.textContent = fmt(stats.burned);
+      values.missing.textContent = fmt(stats.missing.length);
+      const built = longDate(Date.parse(stats.generatedAt) / 1000);
+      const missing = stats.missing.map((n) => `#${n}`);
+      foot.textContent = `${missing.length ? `No one has found a Panda for ${listJoin(missing)}. ` : ""}Counts from the index built on ${built}.`;
+    })
+    .catch(() => {});
+
+  // A year marker opens each year's entries.
+  const items: HTMLElement[] = [];
+  for (const [i, e] of STORY.entries()) {
+    if (STORY[i - 1]?.year !== e.year) items.push(h("li", { class: "story-year", "aria-hidden": "true" }, h("span", {}, e.year)));
+    items.push(renderStoryEntry(e));
+  }
+
+  return h(
+    "section",
+    { class: "story", "aria-labelledby": "story-title" },
+    h("h2", { id: "story-title" }, "The collection, from the chain"),
+    h(
+      "dl",
+      { class: "stats" },
+      ...Object.entries(tiles).map(([k, label]) => h("div", { class: "stat" }, h("dt", {}, label), values[k as keyof typeof tiles])),
+    ),
+    h("ol", { class: "story-list" }, ...items),
+    foot,
+  );
+}
+
+function renderStoryEntry(e: StoryEntry): HTMLElement {
+  const name = `Degen Trash Panda #${e.art.n}`;
+  return h(
+    "li",
+    { class: `story-item${e.tone ? ` ${e.tone}` : ""}` },
+    h(
+      "article",
+      { class: "story-card" },
+      h(
+        "figure",
+        { class: "story-art" },
+        lookupLink(e.art.n, thumb(e.art.image, name, "story-img"), { "aria-label": name }),
+        h("span", { class: "story-stamp", "aria-hidden": "true" }, e.stamp),
+      ),
+      h(
+        "div",
+        { class: "story-text" },
+        h("p", { class: "story-when" }, e.year === "Ever since" ? e.when : `${e.when} ${e.year}`),
+        h("h3", {}, e.title),
+        h("p", {}, e.text),
+      ),
+      // The card's footer: the example Pandas on the left, "See every…" on the right.
+      h(
+        "footer",
+        { class: "story-foot-links" },
+        h("span", {}, "See ", ...join(e.examples.map((n) => lookupLink(n, `#${n}`)))),
+        e.list ? h("span", { class: "story-list-link" }, listLink(e.list)) : "",
+      ),
+    ),
+  );
+}
+
+// --- The grids: every exalted, Immortal or burned Panda, from /api/list/:kind ---
+
+const LISTS: { kind: ListKind; title: string; link: string; intro: string }[] = [
+  {
+    kind: "exalted",
+    title: "Exalted Pandas",
+    link: "See every exalted Panda",
+    intro: "Every Panda carrying an exalted stat today, and what it is. Exalting changed their background art.",
+  },
+  {
+    kind: "unexalted",
+    title: "Un-exalted Pandas",
+    link: "See every un-exalted Panda",
+    intro: "Once exalted, now their exalted stat reads \u201cNone\u201d. Each had its traits swapped in late 2022, when its metadata was on Shadow Drive.",
+  },
+  {
+    kind: "unverified",
+    title: "Off the collection",
+    link: "See every Panda off the collection",
+    intro: "Pandas in neither collection as verified. Most were moved to the Immortal collection without being verified there; their DTP creator still proves they're genuine.",
+  },
+  {
+    kind: "lost",
+    title: "Still lost to Shadow Drive",
+    link: "See the Pandas still lost",
+    intro: "Pandas whose metadata or art still points at GenesysGo Shadow Drive, which is gone. Many more lost part of their history there and later moved off it; they aren't listed.",
+  },
+  {
+    kind: "immortal",
+    title: "The Immortals",
+    link: "See all the Immortals",
+    intro: "Minted on 27–28 June 2023 into the numbers the drop never reached, in the Immortal Degenerate Trash Pandas collection.",
+  },
+  {
+    kind: "burned",
+    title: "Burned Pandas",
+    link: "See every burned Panda",
+    intro: "Gone for good. A few owners burned just the token, which leaves the metadata behind.",
+  },
+];
+
+function listLink(kind: ListKind): HTMLElement {
+  const list = LISTS.find((l) => l.kind === kind)!;
+  const a = h("a", { href: `?list=${kind}` }, `${list.link} →`);
+  a.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.pushState(null, "", `?list=${kind}`);
+    loadFromUrl();
+    window.scrollTo(0, 0);
+  });
+  return a;
+}
+
+async function loadList(list: (typeof LISTS)[number]): Promise<void> {
+  inflight?.abort();
+  const controller = new AbortController();
+  inflight = controller;
+  const head = h(
+    "header",
+    { class: "grid-head" },
+    homeLink(),
+    h("h1", {}, list.title),
+    h("p", { class: "grid-intro" }, list.intro),
+  );
+  const status = h("p", { class: "grid-count" }, "Loading…");
+  result.replaceChildren(h("section", { class: `grid-page ${list.kind}` }, head, status));
+  try {
+    const res = await fetch(`/api/list/${list.kind}`, { signal: controller.signal });
+    if (!res.ok) throw new Error(String(res.status));
+    const body = (await res.json()) as List;
+    if (controller.signal.aborted) return;
+    const burned = body.pandas.filter((p) => p.burned).length;
+    status.textContent =
+      `${body.pandas.length.toLocaleString("en-GB")} Pandas` +
+      (burned && list.kind !== "burned" ? `, ${burned} of them burned` : "") +
+      `. From the index built on ${longDate(Date.parse(body.generatedAt) / 1000)}.`;
+    status.after(h("ul", { class: "panda-grid" }, ...body.pandas.map(renderGridPanda)));
+  } catch {
+    if (controller.signal.aborted) return;
+    status.textContent = "The list couldn't be loaded. Try again in a moment.";
+  }
+}
+
+function renderGridPanda(p: ListEntry): HTMLElement {
+  const name = `Degen Trash Panda #${p.n}`;
+  const lost = p.image !== null && hostOf(p.image) === LOST_HOST;
+  return h(
+    "li",
+    { class: `grid-panda${p.burned ? " burned" : ""}` },
+    lookupLink(
+      String(p.n),
+      h(
+        "span",
+        { class: "grid-card" },
+        lost ? h("div", { class: "thumb empty grid-img" }, "Art lost with Shadow Drive") : thumb(p.image, name, "grid-img"),
+        p.burned ? h("span", { class: "grid-burned", "aria-hidden": "true" }, "Burned") : "",
+        h("span", { class: "grid-n" }, `#${p.n}`),
+        p.stat ? h("span", { class: "grid-stat" }, prettyExalted(p.stat)) : "",
+        p.note ? h("span", { class: "grid-stat" }, p.note) : "",
+      ),
+      { "aria-label": `${name}${p.burned ? ", burned" : ""}` },
+    ),
+  );
+}
+
+function homeLink(): HTMLElement {
+  const a = h("a", { href: "/", class: "grid-back" }, "← The collection");
+  a.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.pushState(null, "", "/");
+    loadFromUrl();
+  });
+  return a;
 }
 
 type Problem = { title: string; text: string; retry?: boolean; random?: boolean; candidates?: string[] };
@@ -270,13 +591,9 @@ function renderHero(r: HistoryResult): HTMLElement {
 
   const notes: string[] = [];
   if (r.changedInHistory) notes.push("The art or traits changed at some point and were later put back.");
-  if (r.burned) notes.push("This Panda has been burned: its metadata account no longer exists.");
   const immortal = r.series === "Immortal";
-  for (const w of r.warnings) {
-    if (r.verdict === "Unknown" && w === r.warnings[0]) continue;
-    if (r.burned && w.startsWith("metadata account does not exist")) continue; // said above
-    notes.push(sentence(w));
-  }
+  // A burned Panda's warning says how it was burned (see src/history.ts).
+  for (const w of r.warnings) if (!(r.verdict === "Unknown" && w === r.warnings[0])) notes.push(sentence(w));
 
   return h(
     "section",
@@ -319,8 +636,17 @@ function renderBadges(r: HistoryResult, mintDate: string): HTMLElement {
       },
       mintDate ? `${series} · minted ${mintDate}` : series,
     ),
+    unexalted(r)
+      ? h("span", { class: "badge unexalted", title: "Its exalted stat now reads \u201cNone\u201d" }, "Un-exalted")
+      : "",
     r.burned ? h("span", { class: "badge burned" }, "Burned") : "",
   );
+}
+
+// Exalted once, but the stat now reads "None" (see isEmptyExaltedStat).
+function unexalted(r: HistoryResult): boolean {
+  const stat = readTraits(r.steps.at(-1)?.json ?? null).values.get(EXALTED);
+  return stat !== undefined && isEmptyExaltedStat(stat);
 }
 
 // The six traits and the image, mint vs now. This is what the verdict is about.
@@ -491,7 +817,7 @@ function renderStep(step: Step, exalted: Set<string>): HTMLElement {
   const swaps = step.diff.filter((c) => c.tag === "swap");
   const cosmetic = step.diff.filter((c) => c.tag === "cosmetic");
   const artChanged = swaps.some((c) => c.path === "image");
-  // Being exalted changed the background art: say so, in gold rather than red.
+  // Being exalted changed the background art: say so, in the exalted colour rather than red.
   const exaltArt = artChanged && swaps.length === 1 && addsExalted(step.diff, exalted);
   const others = listJoin(
     unique(cosmeticPhrases(cosmetic, exalted)).filter(
@@ -608,7 +934,17 @@ function cosmeticPhrases(changes: Change[], exalted: Set<string>): string[] {
 
   const phrases: string[] = [];
   if (renamed) phrases.push("exalted attribute renamed");
-  else if (stat) phrases.push(stat.from === "missing" ? "exalted attribute added" : stat.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
+  else if (stat) {
+    phrases.push(
+      stat.from === "missing"
+        ? "exalted attribute added"
+        : stat.to === "missing"
+          ? "exalted attribute removed"
+          : isEmptyExaltedStat(String(stat.to))
+            ? "exalted stat emptied"
+            : "exalted attribute changed",
+    );
+  }
   for (const c of oldForm) {
     if (renamed && c.to === "missing") continue;
     phrases.push(c.from === "missing" ? "exalted attribute added" : c.to === "missing" ? "exalted attribute removed" : "exalted attribute changed");
@@ -679,8 +1015,8 @@ async function lookupRandom(): Promise<void> {
   }
 }
 
-function randomLink(): HTMLElement {
-  const a = h("a", { href: "#", role: "button" }, "a random Panda");
+function randomLink(attrs: Record<string, string> = {}): HTMLElement {
+  const a = h("a", { href: "#", role: "button", ...attrs }, "a random Panda");
   a.addEventListener("click", (event) => {
     event.preventDefault();
     lookupRandom();
@@ -688,8 +1024,8 @@ function randomLink(): HTMLElement {
   return a;
 }
 
-function lookupLink(q: string, text: string): HTMLElement {
-  const a = h("a", { href: `?n=${encodeURIComponent(q)}` }, text);
+function lookupLink(q: string, content: Child, attrs: Record<string, string> = {}): HTMLElement {
+  const a = h("a", { href: `?n=${encodeURIComponent(q)}`, ...attrs }, content);
   a.addEventListener("click", (event) => {
     event.preventDefault();
     input.value = q;

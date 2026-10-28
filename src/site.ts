@@ -1,9 +1,11 @@
 import { S3Client } from "bun";
 import pandaIndexJson from "../data/panda-index.json" with { type: "json" };
+import listsJson from "../data/lists.json" with { type: "json" };
 import { fileCache, s3Cache } from "./cache.ts";
 import { loadConfig } from "./config.ts";
 import { createApi } from "./api.ts";
 import type { PandaIndex } from "./index-lookup.ts";
+import type { PandaLists } from "./lists.ts";
 import { createFetcher } from "./json-fetch.ts";
 import { createRpc } from "./rpc.ts";
 import { siteOrigin, withShareTags } from "./share.ts";
@@ -25,6 +27,7 @@ const api = createApi({
   fetcher: createFetcher(cache),
   cache,
   index: pandaIndexJson as PandaIndex,
+  lists: listsJson as PandaLists,
   background: onVercel ? (await import("@vercel/functions")).waitUntil : undefined,
 });
 
@@ -79,6 +82,8 @@ export const options = serveOptions({
     "/api/panda/:n": { GET: (req) => api.panda(req.params.n) },
     "/api/mint/:mint": { GET: (req) => api.mint(req.params.mint) },
     "/api/random": { GET: () => api.random() },
+    "/api/stats": { GET: () => api.stats() },
+    "/api/list/:kind": { GET: (req) => api.list(req.params.kind) },
     "/api/*": Response.json({ error: "not_found", detail: "unknown API route" }, { status: 404 }),
   },
   development: !production && { hmr: true, console: true },

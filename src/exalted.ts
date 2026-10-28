@@ -6,11 +6,19 @@ import { readTraits, type Json } from "./traits.ts";
 // exalted also changed the Panda's background art.
 export const EXALTED = "EXALTED_STAT";
 
+// Nine exalted Pandas were left with "EXALTED_STAT: None" when their traits were swapped in late
+// 2022 (#29, #1020, …): the slot stays but they aren't exalted any more.
+export function isEmptyExaltedStat(value: string): boolean {
+  return /:\s*none$/i.test(value.trim());
+}
+
 // Stat names seen in EXALTED_STAT values, so the older one-trait form can be recognised.
 export function exaltedNames(jsons: (Json | null)[]): Set<string> {
   const names = new Set<string>();
   for (const json of jsons) {
-    const name = readTraits(json).values.get(EXALTED)?.split(":")[0]?.trim().toUpperCase();
+    const value = readTraits(json).values.get(EXALTED);
+    // An emptied stat ("EXALTED_STAT: None") names no stat.
+    const name = value && !isEmptyExaltedStat(value) ? value.split(":")[0]?.trim().toUpperCase() : undefined;
     if (name) names.add(name);
   }
   return names;

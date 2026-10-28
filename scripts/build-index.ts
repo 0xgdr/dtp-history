@@ -2,12 +2,22 @@
 // `getAssetsByCreator` (each verified DTP creator, for Pandas whose collection field is wrong) and
 // `searchAssets` with `burnt` (neither of the others returns burned assets). Needs RPC_URL pointing
 // at a DAS-capable endpoint (e.g. Helius). The URL and key are never written to the file.
-import { DTP_COLLECTION_MINT, DTP_CREATORS } from "../src/constants.ts";
+//
+// DAS leaves out of every listing a Panda whose token was burned with a plain token burn (supply 0,
+// metadata left behind). Those are kept in data/extra-mints.json and fetched by id. Any number the
+// previous index had but this build lost is looked up by id too, and added to that file if found,
+// so a Panda burned this way between builds becomes burned instead of missing.
+import { DTP_COLLECTION_MINT, DTP_CREATORS, DTP_IMMORTAL_COLLECTION_MINT } from "../src/constants.ts";
+import { decodeMetadataAccount } from "../src/decode/metadata-account.ts";
+import { metadataPda } from "../src/pda.ts";
 import { loadConfig, redactUrl } from "../src/config.ts";
-import { buildIndex, type DasAsset } from "../src/index-lookup.ts";
-import { createRpc } from "../src/rpc.ts";
+import { buildIndex, lostMints, type DasAsset, type PandaIndex } from "../src/index-lookup.ts";
+import { buildLists, LIST_KINDS } from "../src/lists.ts";
+import { createRpc, RpcError } from "../src/rpc.ts";
 
 const OUT = `${import.meta.dir}/../data/panda-index.json`;
+const EXTRA = `${import.meta.dir}/../data/extra-mints.json`;
+const LISTS = `${import.meta.dir}/../data/lists.json`;
 const LIMIT = 1000;
 
 if (!Bun.env.RPC_URL) {
@@ -38,11 +48,74 @@ for (const creator of DTP_CREATORS) {
   assets.push(...(await pageAll("searchAssets", { creatorAddress: creator, creatorVerified: true, burnt: true })));
 }
 
-const index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, new Date().toISOString());
+// DAS still knows a delisted Panda by id. An NFT's supply is 1: 0 means the token was burned, and a
+// closed mint account (-32602) has no supply left at all.
+async function byId(mint: string): Promise<DasAsset> {
+  const asset = await rpc.call<DasAsset>("getAsset", { id: mint });
+  let supply: string | null = null;
+  try {
+    supply = (await rpc.call<{ value: { amount: string } }>("getTokenSupply", [mint])).value.amount;
+  } catch (err) {
+    if (!(err instanceof RpcError && err.message.includes("-32602"))) throw err;
+  }
+  return { ...asset, burnt: asset.burnt || supply !== "1" };
+}
+
+const extra = (await Bun.file(EXTRA).json()) as { mint: string; note: string }[];
+for (const { mint } of extra) assets.push(await byId(mint));
+console.log(`extra mints: ${extra.length}`);
+
+const generatedAt = new Date().toISOString();
+let index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, generatedAt);
+
+const previous = (await Bun.file(OUT).exists()) ? ((await Bun.file(OUT).json()) as PandaIndex) : null;
+const lost = previous ? lostMints(previous, index) : [];
+if (lost.length) {
+  for (const { mint } of lost) assets.push(await byId(mint));
+  index = buildIndex(assets, DTP_COLLECTION_MINT, DTP_CREATORS, generatedAt);
+  for (const { n, mint } of lost) {
+    const found = index.pandas[n] === mint || index.burned[n] === mint;
+    console.log(`#${n} was in the last index but not listed by DAS: ${found ? "found by id" : "still missing"} (${mint})`);
+    if (found) extra.push({ mint, note: `#${n}, found by id on ${generatedAt.slice(0, 10)}` });
+  }
+  await Bun.write(EXTRA, `${JSON.stringify(extra, null, 2)}\n`);
+}
+
 await Bun.write(OUT, `${JSON.stringify(index)}\n`);
+// DAS only reports verified collections, so for the few Pandas in neither DTP collection, read the
+// collection their metadata account holds.
+const indexed = new Set([...Object.values(index.pandas), ...Object.values(index.burned)]);
+const offCollection = [...new Set(assets.filter((a) => indexed.has(a.id)).map((a) => a.id))].filter(
+  (id) =>
+    !assets.some(
+      (a) => a.id === id && a.grouping?.some((g) => g.group_key === "collection" && [DTP_COLLECTION_MINT, DTP_IMMORTAL_COLLECTION_MINT].includes(g.group_value)),
+    ),
+);
+const collections = new Map<string, string | null>();
+for (const mint of offCollection) {
+  const info = await rpc.call<{ value: { data: [string, string] } | null }>("getAccountInfo", [await metadataPda(mint), { encoding: "base64" }]);
+  collections.set(mint, info.value ? (decodeMetadataAccount(Buffer.from(info.value.data[0], "base64")).collection?.key ?? null) : null);
+}
+const lists = buildLists(assets, index, collections);
+// DAS hasn't read every Panda's metadata file, so for the few without an image, read it here.
+const jsonUri = new Map(assets.map((a) => [a.id, a.content?.json_uri]));
+for (const entry of new Set(Object.values(lists).flatMap((l) => (Array.isArray(l) ? l : [])))) {
+  const uri = entry.image === null ? jsonUri.get(entry.mint) : undefined;
+  if (!uri) continue;
+  try {
+    const json = (await (await fetch(uri, { signal: AbortSignal.timeout(15_000) })).json()) as { image?: unknown };
+    if (typeof json.image === "string" && /^https?:\/\//.test(json.image)) entry.image = json.image;
+  } catch {
+    console.log(`#${entry.n}: no image (${uri} unreadable)`);
+  }
+}
+await Bun.write(LISTS, `${JSON.stringify(lists)}\n`);
 console.log(
   `count ${index.count}, duplicates ${Object.keys(index.duplicates).length}, burned ${Object.keys(index.burned).length}, ` +
     `missing ${index.missing.length}, unparsed ${index.unparsed.length}`,
+);
+console.log(
+  `lists: ${LIST_KINDS.map((k) => `${k} ${lists[k].length}`).join(", ")}`,
 );
 if (index.count < 10_000) {
   console.error(`count ${index.count} is below 10000: paging probably failed`);
