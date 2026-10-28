@@ -2,6 +2,8 @@ import { buildHistory, readCachedHistory, type BuildProgress, type Deps, type Hi
 import { parseInput, resolve, type PandaIndex } from "./index-lookup.ts";
 import { LIST_KINDS, type ListEntry, type ListKind, type PandaLists } from "./lists.ts";
 import { RpcError } from "./rpc.ts";
+import type { ShareCard } from "./share.ts";
+import { thumbSourceOk } from "./thumb-source.ts";
 
 type ApiDeps = Deps & {
   index: PandaIndex | null;
@@ -135,6 +137,33 @@ export function createApi(deps: ApiDeps) {
   }
 
   return {
+    // The share card for a link to one Panda (?n=5642), from its cached history only, so a link
+    // preview never starts a build. Null when the link isn't to a known Panda.
+    async shareCard(raw: string | null): Promise<ShareCard | null> {
+      if (!raw || !deps.index) return null;
+      const input = parseInput(safeDecode(raw));
+      if (input.type !== "number") return null;
+      const found = resolve(deps.index, input.n);
+      if (found.kind !== "found" && found.kind !== "burned") return null;
+      const name = `Degen Trash Panda #${input.n}`;
+      const history = await readCachedHistory(found.mint, deps.cache).catch(() => null);
+      if (!history) {
+        return {
+          title: `${name} · Trash Panda Check`,
+          description: `Has ${name}'s art or traits changed since mint? See its full on-chain metadata history.`,
+          image: null,
+          imageAlt: name,
+        };
+      }
+      const art = history.current.image;
+      return {
+        title: `${name}: ${HEADLINES[history.verdict]}`,
+        description: shareLine(history),
+        image: art && thumbSourceOk(art) ? `/thumb?src=${encodeURIComponent(art)}` : null,
+        imageAlt: name,
+      };
+    },
+
     async panda(raw: string): Promise<Response> {
       const input = parseInput(safeDecode(raw));
       if (input.type === "mint") return respond(input.mint, null);
@@ -206,4 +235,31 @@ function safeDecode(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+const HEADLINES: Record<HistoryResult["verdict"], string> = {
+  Original: "Untouched since mint",
+  "Traits/art changed": "Swapped since mint",
+  Exalted: "Exalted since mint",
+  Unknown: "Can't tell",
+};
+
+// One sentence for a share card, like the page's own headline detail.
+function shareLine(r: HistoryResult): string {
+  const minted = r.steps[0]?.blockTime;
+  const when = minted
+    ? ` Minted ${new Date(minted * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`
+    : "";
+  const changed = r.verdictChanges.map((c) => (c.field === "image" ? "the art" : c.field.charAt(0) + c.field.slice(1).toLowerCase()));
+  const verdict = {
+    Original: "The art and all six traits match the mint.",
+    Exalted: "Its background changed when it was exalted; all six traits match the mint.",
+    "Traits/art changed": `${changed.length ? `${listJoin(changed).replace(/^./, (c) => c.toUpperCase())} ${changed.length === 1 ? "differs" : "differ"}` : "It differs"} from the mint.`,
+    Unknown: "Its current traits can't be read, so there's no verdict.",
+  }[r.verdict];
+  return `${r.burned ? "Burned. " : ""}${verdict}${when}`;
+}
+
+function listJoin(items: string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
