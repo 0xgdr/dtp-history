@@ -125,16 +125,28 @@ index never picks them, because a Panda must be in a DTP collection or carry a v
 
 ## Mint-day traits
 
-`data/mint-traits.json` has every Panda's six traits as minted, read from the Create instruction
-in its metadata account's first transaction and the file it points at. Against today's traits:
+`data/mint-traits.json` has every Panda's six traits and art as minted, read from the Create
+instruction in its metadata account's first transaction and the file it points at.
 
-| Grid | All six as minted | Swapped |
+A grid Panda gets **✓ Original** when it's untouched since mint, as its own page would say: all six
+traits match the mint **and** its image is the very same file (an Arweave id always returns the same
+data, so the same id proves the art didn't change). Traits alone aren't enough: **#275**'s traits
+are exactly as minted, but its art was redrawn in October 2026 (a printed hoodie added under the
+Denim Vest on 12 October, the vest gone on 14 October) with its traits left saying "Denim Vest". Its
+page says "Swapped since mint".
+
+| Grid | ✓ Original | Why the rest aren't |
 |---|---|---|
-| Exalted (693) | 507 | 184 |
-| Un-exalted (9) | 0 | 9 |
-| Immortals (2,395) | 2,395 | 0 |
+| Immortals (2,395) | 2,395 | — |
+| Burned (35) | 30 | 5 have art lost to Shadow Drive |
+| Off the collection (6) | 3 (#1636, #5642, #10305) | #378 Exalted, #536 Swapped (as their pages say); #15639 lost |
+| Exalted (693) | 0 | exalting changed their art (pages say "Exalted" or "Swapped") |
+| Un-exalted (9) | 0 | all 9 swapped |
 
-The six still on Shadow Drive can't be compared; their current traits are unreadable.
+Not yet told apart: exalted Pandas whose only change is the exalt from ones like #275 whose art was
+changed again later. That needs each one's history.
+
+#275 also shows its mint-day metadata didn't match its art: Background "Yellow", art blue.
 
 Two things it took to read them all:
 

@@ -23,13 +23,16 @@ export type ListEntry = {
   note?: string;
   // When `image` is on Shadow Drive (gone): the last art its history can still read, and when.
   lastArt?: { image: string; at: string };
-  // True when all six traits match the mint (data/mint-traits.json), false when any differs;
-  // absent when either side can't be read. Says nothing about the art (exalting changed it).
+  // True when the Panda is untouched since mint, as its own page would say: all six traits match
+  // the mint (data/mint-traits.json) and its image is the very same file. An Arweave id always
+  // returns the same data, so the same id proves the art didn't change. False when either differs:
+  // exalting changed the art (the page says "Exalted"), and #275's art was redrawn in October 2026
+  // with its traits left as they were. Absent when either side can't be read.
   original?: boolean;
 };
 
-// Mint-day traits by Panda number, from data/mint-traits.json.
-export type MintTraitsByNumber = Record<string, { traits: Record<string, string> } | { error: string }>;
+// Mint-day traits and art by Panda number, from data/mint-traits.json.
+export type MintTraitsByNumber = Record<string, { traits: Record<string, string>; image?: string | null } | { error: string }>;
 
 export type PandaLists = { generatedAt: string } & Record<ListKind, ListEntry[]>;
 
@@ -69,7 +72,7 @@ export function buildLists(
       burned: index.burned[n] === asset.id,
     };
     // DAS's copy of a Panda whose metadata is on Shadow Drive is stale, so compare only readable ones.
-    const original = hostOf(asset.content?.json_uri) === LOST_HOST ? undefined : sameTraits(mintTraits[n], asset);
+    const original = hostOf(asset.content?.json_uri) === LOST_HOST ? undefined : untouched(mintTraits[n], asset);
     if (original !== undefined) entry.original = original;
     const stat = asset.content?.metadata?.attributes?.find((a) => a.trait_type === EXALTED)?.value;
     if (stat !== undefined) {
@@ -106,10 +109,20 @@ function hostOf(url: string | undefined): string | null {
   }
 }
 
-function sameTraits(mint: MintTraitsByNumber[string] | undefined, asset: DasAsset): boolean | undefined {
+function untouched(mint: MintTraitsByNumber[string] | undefined, asset: DasAsset): boolean | undefined {
   if (!mint || "error" in mint || !TRAITS.some((t) => t in mint.traits)) return undefined;
   const attributes = asset.content?.metadata?.attributes;
-  if (!attributes?.length) return undefined;
+  const image = asset.content?.links?.image;
+  if (!attributes?.length || !mint.image || !image) return undefined;
   const now = readTraits({ attributes }).values;
-  return TRAITS.every((t) => (mint.traits[t] ?? null) === (now.get(t) ?? null));
+  return TRAITS.every((t) => (mint.traits[t] ?? null) === (now.get(t) ?? null)) && fileId(mint.image) === fileId(image);
+}
+
+// The Arweave id an image URL names, whatever the gateway or query (e.g. ?ext=png).
+function fileId(url: string): string | null {
+  try {
+    return new URL(url).pathname.split("/").filter(Boolean).at(-1) ?? null;
+  } catch {
+    return null;
+  }
 }

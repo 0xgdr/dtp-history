@@ -100,7 +100,7 @@ describe("GET /api/list/:kind", () => {
   });
 });
 
-describe("original: six traits against the mint", () => {
+describe("original: six traits and the art file against the mint", () => {
   const six = { HEAD: "Sock", BODY: "T-Shirt", MOUTH: "Cigar - Grin", GLASSES: "No Traits", BACKGROUND: "Red", FUR: "Red - Grin" };
   const swapped = { ...six, HEAD: "Crown" };
   const traitAssets = [
@@ -108,15 +108,31 @@ describe("original: six traits against the mint", () => {
     panda("o2", 2, { stat: "WEN: Soon", traits: swapped }),
     panda("o3", 3, { stat: "WEN: Soon", traits: six }),
     panda("o4", 4, { stat: "WEN: Soon", traits: six, jsonUri: "https://shdw-drive.genesysgo.net/x/4.json" }),
+    // Like #275: traits as minted, but the art redrawn (a new file).
+    panda("o5", 5, { stat: "WEN: Soon", traits: six, image: "https://ardrive.net/redrawn" }),
+    // The mint-day file through another gateway and with ?ext=png: the same art.
+    panda("o6", 6, { stat: "WEN: Soon", traits: six, image: "https://www.arweave.net/o6?ext=png" }),
   ];
   const traitIndex = buildIndex(traitAssets, DTP_COLLECTION_MINT, DTP_CREATORS, "2026-10-28T00:00:00.000Z");
-  const mint = { traits: six };
-  const traitLists = buildLists(traitAssets, traitIndex, new Map(), { "1": mint, "2": mint, "3": { error: "metadata unreadable" }, "4": mint });
+  const mint = (n: number) => ({ traits: six, image: `https://arweave.net/o${n}` });
+  const traitLists = buildLists(traitAssets, traitIndex, new Map(), {
+    "1": mint(1),
+    "2": mint(2),
+    "3": { error: "metadata unreadable" },
+    "4": mint(4),
+    "5": mint(5),
+    "6": mint(6),
+  });
   const byN = new Map(traitLists.exalted.map((e) => [e.n, e.original]));
 
-  test("all six the same is original; any swap isn't", () => {
+  test("all six the same and the same art file is original; any swap isn't", () => {
     expect(byN.get(1)).toBe(true);
     expect(byN.get(2)).toBe(false);
+  });
+
+  test("traits as minted but new art isn't original (#275); the same file via another URL is", () => {
+    expect(byN.get(5)).toBe(false);
+    expect(byN.get(6)).toBe(true);
   });
 
   test("unknown when the mint traits or the current ones can't be read", () => {
