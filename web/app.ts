@@ -641,7 +641,8 @@ function renderHero(r: HistoryResult): HTMLElement {
       "figure",
       { class: `hero-art${r.burned ? " burned" : ""}${lostArt ? " art-lost" : ""}` },
       lostArt
-        ? lostStamped(thumb(lostArt.image, `Degen Trash Panda #${r.number}, last readable art`, "hero-img"))
+        ? // Through /thumb, which tries more than one gateway: this old art is often the flakiest.
+          lostStamped(thumb(thumbUrl(lostArt.image), `Degen Trash Panda #${r.number}, last readable art`, "hero-img"))
         : thumb(r.current.image, r.number !== null ? `Degen Trash Panda #${r.number}` : "This Panda's current art", "hero-img"),
       h("span", { class: `stamp ${stamp.cls}`, "aria-hidden": "true" }, stamp.text),
     ),

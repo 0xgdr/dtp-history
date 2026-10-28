@@ -8,17 +8,45 @@ const SIZE = 400; // twice the largest tile, for high-density screens
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_PIXELS = 8192 * 8192;
 const CACHE_HEADERS = { "cache-control": "public, max-age=31536000, s-maxage=31536000, immutable" };
+const ATTEMPT_MS = 20_000;
+
+// Where to fetch an image from, in order. Arweave addresses are content hashes that any Arweave
+// gateway serves, and arweave.net can fail on a file ArDrive serves in seconds (#15639's art: 572
+// after 50 s, against 200 in 3 s), so for either host try the other too, ArDrive first.
+export function sourcesFor(src: string): string[] {
+  const url = new URL(src);
+  const id = /^\/([A-Za-z0-9_-]{43})$/.exec(url.pathname)?.[1];
+  if (!id) return [src];
+  const ardrive = `https://ardrive.net/${id}`;
+  const arweave = `https://arweave.net/${id}`;
+  return url.host === "ardrive.net" ? [src, arweave] : [ardrive, src];
+}
 
 export function createThumbs({ cache, fetchImpl = fetch }: { cache: Cache; fetchImpl?: typeof fetch }) {
   // Concurrent requests for one image share one fetch and encode.
   const inflight = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
 
-  async function make(src: string): Promise<Uint8Array<ArrayBuffer>> {
-    const res = await fetchImpl(src, { signal: AbortSignal.timeout(45_000) });
-    if (!res.ok) throw new Error(`source answered ${res.status}`);
+  async function download(url: string): Promise<Uint8Array> {
+    const res = await fetchImpl(url, { signal: AbortSignal.timeout(ATTEMPT_MS) });
+    if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status}`);
     if (Number(res.headers.get("content-length") ?? 0) > MAX_BYTES) throw new Error("source too large");
     const bytes = await res.bytes();
     if (bytes.length > MAX_BYTES) throw new Error("source too large");
+    return bytes;
+  }
+
+  async function make(src: string): Promise<Uint8Array<ArrayBuffer>> {
+    const failures: string[] = [];
+    let bytes: Uint8Array | null = null;
+    for (const url of sourcesFor(src)) {
+      try {
+        bytes = await download(url);
+        break;
+      } catch (err) {
+        failures.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+    if (!bytes) throw new Error(failures.join("; "));
     const webp = await new Bun.Image(bytes, { maxPixels: MAX_PIXELS })
       .resize(SIZE, SIZE, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })
