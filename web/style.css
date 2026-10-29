@@ -685,6 +685,7 @@ main {
   margin: 16px 0 0;
   font-size: 1.25rem;
   font-weight: 700;
+  font-feature-settings: "tnum";
   min-height: 1.5em;
 }
 
@@ -1453,6 +1454,21 @@ pre {
 
   .compare {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dig {
+    padding-inline: 8px;
+  }
+
+  .dig-status {
+    font-size: clamp(0.9375rem, 4vw, 1.25rem);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 320px) {
+  .dig-status {
+    white-space: normal;
   }
 }
 
