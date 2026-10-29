@@ -1294,6 +1294,30 @@ pre {
 }
 
 @media (max-width: 720px) {
+  html {
+    scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 8.5rem);
+  }
+
+  .band {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding-top: env(safe-area-inset-top, 0px);
+    background: var(--band);
+  }
+
+  .band-inner {
+    padding-block: 12px 14px;
+    gap: 10px 16px;
+  }
+
+  #story-title,
+  .hero,
+  .grid-head h1,
+  .step > details > summary {
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 8.5rem);
+  }
+
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
