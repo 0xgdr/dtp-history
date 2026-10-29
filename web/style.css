@@ -88,6 +88,7 @@ main {
   font-variation-settings: "wdth" 125;
   letter-spacing: -0.01em;
   line-height: 1;
+  flex: none;
 }
 
 .logo {
@@ -1275,6 +1276,20 @@ pre {
   overflow-wrap: anywhere;
 }
 
+/* Visually hidden; still available to screen readers and crawlers that read DOM text. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* Phones */
 
 @media (max-width: 380px) {
@@ -1295,7 +1310,7 @@ pre {
 
 @media (max-width: 720px) {
   html {
-    scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 8.5rem);
+    scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 4rem);
   }
 
   .band {
@@ -1307,15 +1322,78 @@ pre {
   }
 
   .band-inner {
-    padding-block: 12px 14px;
-    gap: 10px 16px;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .wordmark {
+    gap: 0;
+  }
+
+  .wordmark-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .search {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .search label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .search-row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .search input {
+    padding-block: 9px;
+  }
+
+  .search button {
+    flex: none;
+    padding-inline: 14px;
+  }
+
+  .search .dice {
+    flex: none;
+    padding-inline: 10px;
   }
 
   #story-title,
   .hero,
   .grid-head h1,
   .step > details > summary {
-    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 8.5rem);
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4rem);
   }
 
   .stats {
