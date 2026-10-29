@@ -1276,20 +1276,6 @@ pre {
   overflow-wrap: anywhere;
 }
 
-/* Visually hidden; still available to screen readers and crawlers that read DOM text. */
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border-width: 0;
-}
-
 /* Phones */
 
 @media (max-width: 380px) {
@@ -1330,9 +1316,11 @@ pre {
 
   .wordmark {
     gap: 0;
+    position: relative;
   }
 
-  .wordmark-text {
+  .wordmark-text,
+  .search label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1356,18 +1344,6 @@ pre {
     align-items: center;
     min-width: 0;
     max-width: none;
-  }
-
-  .search label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border-width: 0;
   }
 
   .search-row {
