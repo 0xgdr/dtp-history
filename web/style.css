@@ -1462,13 +1462,6 @@ pre {
 
   .dig-status {
     font-size: clamp(0.9375rem, 4vw, 1.25rem);
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 320px) {
-  .dig-status {
-    white-space: normal;
   }
 }
 
