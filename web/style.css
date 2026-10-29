@@ -1403,9 +1403,14 @@ pre {
   }
 
   .story-card {
-    grid-template-columns: 84px minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
     padding: 14px;
+  }
+
+  .story-art {
+    width: 100%;
+    max-width: 100%;
   }
 
   .story-stamp {
